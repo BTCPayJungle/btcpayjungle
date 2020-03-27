@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using BTCPayServer.Security.GreenField;
+using NBitcoin.DataEncoders;
+using NBitcoin;
 
 namespace BTCPayServer.Controllers.GreenField
 {
@@ -35,18 +37,47 @@ namespace BTCPayServer.Controllers.GreenField
             return Ok(FromModel(data));
         }
 
+        [HttpPost("~/api/v1/api-keys")]
+        [Authorize(Policy = Policies.Unrestricted, AuthenticationSchemes = AuthenticationSchemes.Greenfield)]
+        public async Task<ActionResult<ApiKeyData>> CreateKey(CreateApiKeyRequest request)
+        {
+            if (request is null)
+                return BadRequest();
+            var key = new APIKeyData()
+            {
+                Id = Encoders.Hex.EncodeData(RandomUtils.GetBytes(20)),
+                Type = APIKeyType.Permanent,
+                UserId = _userManager.GetUserId(User),
+                Label = request.Label
+            };
+            key.Permissions = string.Join(";", request.Permissions.Select(p => p.ToString()).Distinct().ToArray());
+            await _apiKeyRepository.CreateKey(key);
+            return Ok(FromModel(key));
+        }
+
         [HttpDelete("~/api/v1/api-keys/current")]
-        [Authorize(Policy = Policies.Unrestricted, AuthenticationSchemes = AuthenticationSchemes.GreenfieldAPIKeys)]
-        public async Task<ActionResult<ApiKeyData>> RevokeKey()
+        [Authorize(AuthenticationSchemes = AuthenticationSchemes.GreenfieldAPIKeys)]
+        public Task<IActionResult> RevokeCurrentKey()
         {
             if (!ControllerContext.HttpContext.GetAPIKey(out var apiKey))
             {
-                return NotFound();
+                // Should be impossible (we force apikey auth)
+                return Task.FromResult<IActionResult>(BadRequest());
             }
-            await _apiKeyRepository.Remove(apiKey, _userManager.GetUserId(User));
-            return Ok();
+            return RevokeKey(apiKey);
         }
-        
+        [HttpDelete("~/api/v1/api-keys/{apikey}", Order = 1)]
+        [Authorize(Policy = Policies.Unrestricted, AuthenticationSchemes = AuthenticationSchemes.Greenfield)]
+        public async Task<IActionResult> RevokeKey(string apikey)
+        {
+            if (string.IsNullOrEmpty(apikey))
+                return BadRequest();
+            if (await _apiKeyRepository.Remove(apikey, _userManager.GetUserId(User)))
+                return Ok();
+            else
+                return NotFound();
+        }
+
         private static ApiKeyData FromModel(APIKeyData data)
         {
             return new ApiKeyData()

@@ -37,7 +37,7 @@ namespace BTCPayServer.Tests
                 var user = tester.NewAccount();
                 user.GrantAccess();
                 await user.MakeAdmin();
-                var client = await user.CreateClient(Policies.Unrestricted);
+                var client = await user.CreateClient(Policies.CanViewProfile);
                 var clientBasic = await user.CreateClient();
                 //Get current api key 
                 var apiKeyData = await client.GetCurrentAPIKeyInfo();
@@ -53,6 +53,36 @@ namespace BTCPayServer.Tests
                 await AssertHttpError(401, async () => await client.GetCurrentAPIKeyInfo());
                 //a client using Basic Auth has no business here
                 await AssertHttpError(401, async () => await clientBasic.RevokeCurrentAPIKeyInfo());
+            }
+        }
+        [Fact(Timeout = TestTimeout)]
+        [Trait("Integration", "Integration")]
+        public async Task CanCreateAndDeleteAPIKeyViaAPI()
+        {
+            using (var tester = ServerTester.Create())
+            {
+                await tester.StartAsync();
+                var acc = tester.NewAccount();
+                await acc.GrantAccessAsync();
+                var unrestricted = await acc.CreateClient();
+                var apiKey = await unrestricted.CreateAPIKey(new CreateApiKeyRequest()
+                {
+                    Label = "Hello world",
+                    Permissions = new Permission[] { Permission.Create(Policies.CanViewProfile) }
+                });
+                Assert.Equal("Hello world", apiKey.Label);
+                var p = Assert.Single(apiKey.Permissions);
+                Assert.Equal(Policies.CanViewProfile, p.Policy);
+
+                var restricted = acc.CreateClientFromAPIKey(apiKey.ApiKey);
+                await AssertHttpError(403, async () => await restricted.CreateAPIKey(new CreateApiKeyRequest()
+                {
+                    Label = "Hello world2",
+                    Permissions = new Permission[] { Permission.Create(Policies.CanViewProfile) }
+                }));
+
+                await unrestricted.RevokeAPIKey(apiKey.ApiKey);
+                await AssertHttpError(404, async () => await unrestricted.RevokeAPIKey(apiKey.ApiKey));
             }
         }
 

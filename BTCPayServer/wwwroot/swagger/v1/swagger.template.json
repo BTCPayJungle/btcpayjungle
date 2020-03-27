@@ -77,7 +77,7 @@
                         }
                     }
                 },
-                "security": [ ]
+                "security": []
             }
         },
         "/api/v1/users/me": {
@@ -188,23 +188,48 @@
                 ]
             }
         },
+        "/api/v1/api-keys/{apikey}": {
+            "delete": {
+                "tags": [
+                    "API Keys"
+                ],
+                "summary": "Revoke an API Key",
+                "description": "Revoke the current API key so that it cannot be used anymore",
+                "parameters": [
+                    {
+                        "name": "apikey",
+                        "in": "path",
+                        "required": true,
+                        "description": "The API Key to revoke",
+                        "schema": { "type": "string" }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The key has been deleted"
+                    },
+                    "404": {
+                        "description": "The key is not found for this user"
+                    }
+                },
+                "security": [
+                    {
+                        "API Key": [ "unrestricted" ],
+                        "Basic": []
+                    }
+                ]
+            }
+        },
         "/api/v1/api-keys/current": {
             "get": {
                 "tags": [
                     "API Keys"
                 ],
-                "summary": "Get current API Key information",
+                "summary": "Get the current API Key information",
                 "description": "View information about the current API key",
                 "responses": {
                     "200": {
-                        "description": "Information about the current api key",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/ApiKeyData"
-                                }
-                            }
-                        }
+                        "description": "The key has been deleted"
                     }
                 },
                 "security": [
@@ -233,7 +258,60 @@
                 },
                 "security": [
                     {
-                        "API Key": [ "unrestricted" ]
+                        "API Key": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/api-keys": {
+            "post": {
+                "tags": [
+                    "API Keys"
+                ],
+                "summary": "Create a new API Key",
+                "description": "Create a new API Key",
+                "responses": {
+                    "200": {
+                        "description": "Information about the new api key",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiKeyData"
+                                }
+                            }
+                        }
+                    }
+                },
+                "requestBody": {
+                    "x-name": "request",
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "properties": {
+                                    "label": {
+                                        "type": "string",
+                                        "description": "The label of the new API Key",
+                                        "nullable": true
+                                    },
+                                    "permissions": {
+                                        "type": "array",
+                                        "description": "The permissions granted to this API Key (See API Key Authentication)",
+                                        "nullable": true,
+                                        "items": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "API Key": [ "unrestricted" ],
+                        "Basic": []
                     }
                 ]
             }
