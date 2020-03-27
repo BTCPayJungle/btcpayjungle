@@ -28,6 +28,7 @@ using NBitcoin;
 using NBitcoin.DataEncoders;
 using NBitpayClient;
 using Newtonsoft.Json.Linq;
+using NUglify.Helpers;
 using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -153,6 +154,11 @@ namespace BTCPayServer.Services.Apps
                 Sounds = settings.Sounds,
                 AnimationColors = settings.AnimationColors,
                 CurrencyData = _Currencies.GetCurrencyData(settings.TargetCurrency, true),
+                CurrencyDataPayments = currentPayments.Select(pair => pair.Key)
+                    .Concat(pendingPayments.Select(pair => pair.Key))
+                    .Select(id => _Currencies.GetCurrencyData(id.CryptoCode, true))
+                    .DistinctBy(data => data.Code)
+                    .ToDictionary(data => data.Code, data => data),
                 Info = new ViewCrowdfundViewModel.CrowdfundInfo()
                 {
                     TotalContributors = paidInvoices.Length,
@@ -216,12 +222,14 @@ namespace BTCPayServer.Services.Apps
             }
         }
 
-        public async Task<ListAppsViewModel.ListAppViewModel[]> GetAllApps(string userId, bool allowNoUser = false)
+        public async Task<ListAppsViewModel.ListAppViewModel[]> GetAllApps(string userId, bool allowNoUser = false, string storeId = null)
         {
             using (var ctx = _ContextFactory.CreateContext())
             {
                 return await ctx.UserStore
-                    .Where(us => (allowNoUser && string.IsNullOrEmpty(userId)) || us.ApplicationUserId == userId)
+                    .Where(us =>
+                        ((allowNoUser && string.IsNullOrEmpty(userId)) || us.ApplicationUserId == userId) &&
+                        (storeId == null || us.StoreDataId == storeId))
                     .Join(ctx.Apps, us => us.StoreDataId, app => app.StoreDataId,
                         (us, app) =>
                             new ListAppsViewModel.ListAppViewModel()

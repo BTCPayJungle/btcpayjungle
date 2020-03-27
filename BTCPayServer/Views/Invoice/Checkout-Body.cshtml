@@ -155,7 +155,7 @@
 </div>
 
 <div class="payment-box" v-bind:class="{ 'payment-box--with-recommended-fee': showRecommendedFee && !showEmailForm }">
-    <div class="bp-view payment manual-flow enter-contact-email" id="emailAddressView" v-bind:class="{ 'active': showEmailForm}">
+    <div class="bp-view enter-contact-email" id="emailAddressView" v-bind:class="{ 'active': showEmailForm}">
         <form class="manual__step-one refund-address-form contact-email-form" id="emailAddressForm" name="emailAddressForm" novalidate="" v-on:submit.prevent="onEmailSubmit">
             <div class="manual__step-one__header">
                 <span>{{$t("Contact and Refund Email")}}</span>
@@ -190,7 +190,7 @@
         </component>
     </div>
 
-    <div class="bp-view" id="paid" v-bind:class="{ 'active': invoicePaid}">
+    <div class="bp-view" id="paid" v-bind:class="{ 'active': invoicePaid && !showEmailForm}">
         <div class="status-block">
             <div class="success-block">
                 <div class="status-icon">
@@ -208,7 +208,7 @@
                     <span v-html="$t('Return to StoreName', srvModel)"></span>
                 </a>
                 <button class="action-button close-action" v-show="isModal" v-on:click="close">
-                    <span v-html="$t('Close')">{{$t("Return to StoreName", srvModel)}}</span>
+                    <span v-html="$t('Close')"></span>
                 </button>
             </div>
         </div>
@@ -241,7 +241,7 @@
                 <span>{{$t("Return to StoreName", srvModel)}}</span>
             </a>
             <button class="action-button close-action" v-show="isModal" v-on:click="close">
-                <span>{{$t("Return to StoreName", srvModel)}}</span>
+                <span v-html="$t('Close')"></span>
             </button>
         </div>
     </div>

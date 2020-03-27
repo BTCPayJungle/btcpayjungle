@@ -18,9 +18,9 @@ using BTCPayServer.Tests.Logging;
 using BTCPayServer.Lightning;
 using BTCPayServer.Lightning.CLightning;
 using BTCPayServer.Data;
-using OpenIddict.Abstractions;
-using OpenIddict.Core;
 using Microsoft.AspNetCore.Identity;
+using NBXplorer.Models;
+using BTCPayServer.Client;
 
 namespace BTCPayServer.Tests
 {
@@ -38,23 +38,46 @@ namespace BTCPayServer.Tests
             GrantAccessAsync().GetAwaiter().GetResult();
         }
 
-        public async Task MakeAdmin()
+        public async Task MakeAdmin(bool isAdmin = true)
         {
             var userManager = parent.PayTester.GetService<UserManager<ApplicationUser>>();
             var u = await userManager.FindByIdAsync(UserId);
-            await userManager.AddToRoleAsync(u, Roles.ServerAdmin);
+            if (isAdmin)
+                await userManager.AddToRoleAsync(u, Roles.ServerAdmin);
+            else
+                await userManager.RemoveFromRoleAsync(u, Roles.ServerAdmin);
+            IsAdmin = true;
+        }
+
+        public Task<BTCPayServerClient> CreateClient()
+        {
+            return Task.FromResult(new BTCPayServerClient(parent.PayTester.ServerUri, RegisterDetails.Email, RegisterDetails.Password));
+        }
+
+        public async Task<BTCPayServerClient> CreateClient(params string[] permissions)
+        {
+            var manageController = parent.PayTester.GetController<ManageController>(UserId, StoreId, IsAdmin);
+            var x = Assert.IsType<RedirectToActionResult>(await manageController.AddApiKey(
+                new ManageController.AddApiKeyViewModel()
+                {
+                    PermissionValues = permissions.Select(s => new ManageController.AddApiKeyViewModel.PermissionValueItem()
+                    {
+                        Permission = s,
+                        Value = true
+                    }).ToList(),
+                    StoreMode = ManageController.AddApiKeyViewModel.ApiKeyStoreMode.AllStores
+                }));
+            var statusMessage = manageController.TempData.GetStatusMessageModel();
+            Assert.NotNull(statusMessage);
+            var apiKey = statusMessage.Html.Substring(statusMessage.Html.IndexOf("<code>") + 6);
+            apiKey = apiKey.Substring(0, apiKey.IndexOf("</code>"));
+            return new BTCPayServerClient(parent.PayTester.ServerUri, apiKey);
         }
 
         public void Register()
         {
             RegisterAsync().GetAwaiter().GetResult();
         }
-
-        public BitcoinExtKey ExtKey
-        {
-            get; set;
-        }
-
         public async Task GrantAccessAsync()
         {
             await RegisterAsync();
@@ -100,26 +123,46 @@ namespace BTCPayServer.Tests
 
         public BTCPayNetwork SupportedNetwork { get; set; }
 
-        public WalletId RegisterDerivationScheme(string crytoCode, bool segwit = false)
+        public WalletId RegisterDerivationScheme(string crytoCode, bool segwit = false, bool importKeysToNBX = false)
         {
-            return RegisterDerivationSchemeAsync(crytoCode, segwit).GetAwaiter().GetResult();
+            return RegisterDerivationSchemeAsync(crytoCode, segwit, importKeysToNBX).GetAwaiter().GetResult();
         }
-        public async Task<WalletId> RegisterDerivationSchemeAsync(string cryptoCode, bool segwit = false)
+        public async Task<WalletId> RegisterDerivationSchemeAsync(string cryptoCode, bool segwit = false, bool importKeysToNBX = false)
         {
             SupportedNetwork = parent.NetworkProvider.GetNetwork<BTCPayNetwork>(cryptoCode);
             var store = parent.PayTester.GetController<StoresController>(UserId, StoreId);
-            ExtKey = new ExtKey().GetWif(SupportedNetwork.NBitcoinNetwork);
-            DerivationScheme = SupportedNetwork.NBXplorerNetwork.DerivationStrategyFactory.Parse(ExtKey.Neuter().ToString() + (segwit ? "" : "-[legacy]"));
+            GenerateWalletResponseV = await parent.ExplorerClient.GenerateWalletAsync(new GenerateWalletRequest()
+            {
+                ScriptPubKeyType = segwit ? ScriptPubKeyType.Segwit : ScriptPubKeyType.Legacy,
+                SavePrivateKeys = importKeysToNBX
+            });
+
             await store.AddDerivationScheme(StoreId, new DerivationSchemeViewModel()
             {
+                Enabled = true,
+                CryptoCode = cryptoCode,
+                Network = SupportedNetwork,
+                RootFingerprint = GenerateWalletResponseV.AccountKeyPath.MasterFingerprint.ToString(),
+                RootKeyPath = SupportedNetwork.GetRootKeyPath(),
+                Source = "NBXplorer",
+                AccountKey = GenerateWalletResponseV.AccountHDKey.Neuter().ToWif(),
+                DerivationSchemeFormat = "BTCPay",
+                KeyPath = GenerateWalletResponseV.AccountKeyPath.KeyPath.ToString(),
                 DerivationScheme = DerivationScheme.ToString(),
                 Confirmation = true
             }, cryptoCode);
-
             return new WalletId(StoreId, cryptoCode);
         }
 
-        public DerivationStrategyBase DerivationScheme { get; set; }
+        public GenerateWalletResponse GenerateWalletResponseV { get; set; }
+
+        public DerivationStrategyBase DerivationScheme
+        {
+            get
+            {
+                return GenerateWalletResponseV.DerivationScheme;
+            }
+        }
 
         private async Task RegisterAsync()
         {
@@ -132,6 +175,7 @@ namespace BTCPayServer.Tests
             };
             await account.Register(RegisterDetails);
             UserId = account.RegisteredUserId;
+            IsAdmin = account.RegisteredAdmin;
         }
 
         public RegisterViewModel RegisterDetails{ get; set; }
@@ -177,15 +221,6 @@ namespace BTCPayServer.Tests
             }, "save", "BTC");
             if (storeController.ModelState.ErrorCount != 0)
                 Assert.False(true, storeController.ModelState.FirstOrDefault().Value.Errors[0].ErrorMessage);
-        }
-
-        public async Task<BTCPayOpenIdClient> RegisterOpenIdClient(OpenIddictApplicationDescriptor descriptor, string secret = null)
-        {
-          var openIddictApplicationManager = parent.PayTester.GetService<OpenIddictApplicationManager<BTCPayOpenIdClient>>();
-          var client = new BTCPayOpenIdClient { Id = Guid.NewGuid().ToString(), ApplicationUserId = UserId};
-          await openIddictApplicationManager.PopulateAsync(client, descriptor);
-          await openIddictApplicationManager.CreateAsync(client, secret);
-          return client;
         }
     }
 }

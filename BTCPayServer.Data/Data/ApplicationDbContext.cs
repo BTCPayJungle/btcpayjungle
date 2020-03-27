@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using OpenIddict.EntityFrameworkCore.Models;
 
 namespace BTCPayServer.Data
 {
@@ -160,6 +159,12 @@ namespace BTCPayServer.Data
                    .HasOne(o => o.StoreData)
                    .WithMany(i => i.APIKeys)
                    .HasForeignKey(i => i.StoreId).OnDelete(DeleteBehavior.Cascade);
+            
+            builder.Entity<APIKeyData>()
+                .HasOne(o => o.User)
+                .WithMany(i => i.APIKeys)
+                .HasForeignKey(i => i.UserId).OnDelete(DeleteBehavior.Cascade);
+            
             builder.Entity<APIKeyData>()
                 .HasIndex(o => o.StoreId);
 
@@ -254,9 +259,7 @@ namespace BTCPayServer.Data
             builder.Entity<WalletTransactionData>()
                 .HasOne(o => o.WalletData)
                 .WithMany(w => w.WalletTransactions).OnDelete(DeleteBehavior.Cascade);
-
-            builder.UseOpenIddict<BTCPayOpenIdClient, BTCPayOpenIdAuthorization, OpenIddictScope<string>, BTCPayOpenIdToken, string>();
-
+            
             if (Database.IsSqlite() && !_designTime)
             {
                 // SQLite does not have proper support for DateTimeOffset via Entity Framework Core, see the limitations

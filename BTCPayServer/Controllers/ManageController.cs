@@ -19,6 +19,9 @@ using System.Globalization;
 using BTCPayServer.Security;
 using BTCPayServer.U2F;
 using BTCPayServer.Data;
+using BTCPayServer.Security.APIKeys;
+using Microsoft.AspNetCore.Routing;
+
 
 namespace BTCPayServer.Controllers
 {
@@ -34,6 +37,9 @@ namespace BTCPayServer.Controllers
         IWebHostEnvironment _Env;
         public U2FService _u2FService;
         private readonly BTCPayServerEnvironment _btcPayServerEnvironment;
+        private readonly APIKeyRepository _apiKeyRepository;
+        private readonly IAuthorizationService _authorizationService;
+        private readonly LinkGenerator _linkGenerator;
         StoreRepository _StoreRepository;
 
 
@@ -48,7 +54,11 @@ namespace BTCPayServer.Controllers
           StoreRepository storeRepository,
           IWebHostEnvironment env, 
           U2FService  u2FService,
-          BTCPayServerEnvironment btcPayServerEnvironment)
+          BTCPayServerEnvironment btcPayServerEnvironment,
+          APIKeyRepository apiKeyRepository,
+          IAuthorizationService authorizationService,
+          LinkGenerator linkGenerator
+          )
         {
             _userManager = userManager;
             _signInManager = signInManager;
@@ -58,6 +68,9 @@ namespace BTCPayServer.Controllers
             _Env = env;
             _u2FService = u2FService;
             _btcPayServerEnvironment = btcPayServerEnvironment;
+            _apiKeyRepository = apiKeyRepository;
+            _authorizationService = authorizationService;
+            _linkGenerator = linkGenerator;
             _StoreRepository = storeRepository;
         }
 
@@ -147,7 +160,7 @@ namespace BTCPayServer.Controllers
             }
 
             var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            var callbackUrl = Url.EmailConfirmationLink(user.Id, code, Request.Scheme);
+            var callbackUrl = _linkGenerator.EmailConfirmationLink(user.Id, code, Request.Scheme, Request.HttpContext);
             var email = user.Email;
             _EmailSenderFactory.GetEmailSender().SendEmailConfirmation(email, callbackUrl);
             TempData[WellKnownTempData.SuccessMessage] = "Verification email sent. Please check your email.";

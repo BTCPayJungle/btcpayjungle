@@ -9,7 +9,6 @@
         <li>
             <p>
                 Download a two-factor authenticator app like Microsoft Authenticator for
-                <a href="https://go.microsoft.com/fwlink/?Linkid=825071">Windows Phone</a>,
                 <a href="https://go.microsoft.com/fwlink/?Linkid=825072">Android</a> and
                 <a href="https://go.microsoft.com/fwlink/?Linkid=825073">iOS</a> or
                 Google Authenticator for
@@ -56,7 +55,8 @@
                 text: @Safe.Json(Model.AuthenticatorUri),
                 width: 200,
                 height: 200,
-                useSVG: true
+                useSVG: true,
+                correctLevel : QRCode.CorrectLevel.M
             });
         $("#qrCode > img").css({ "margin": "auto" });
     </script>

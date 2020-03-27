@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using BTCPayServer.Client;
 using BTCPayServer.Configuration;
 using BTCPayServer.Data;
 using BTCPayServer.HostedServices;
@@ -17,6 +18,7 @@ using BTCPayServer.Rating;
 using BTCPayServer.Security;
 using BTCPayServer.Security.Bitpay;
 using BTCPayServer.Services;
+using BTCPayServer.Services.Apps;
 using BTCPayServer.Services.Invoices;
 using BTCPayServer.Services.Rates;
 using BTCPayServer.Services.Stores;
@@ -33,7 +35,7 @@ namespace BTCPayServer.Controllers
 {
     [Route("stores")]
     [Authorize(AuthenticationSchemes = AuthenticationSchemes.Cookie)]
-    [Authorize(Policy = Policies.CanModifyStoreSettings.Key, AuthenticationSchemes = AuthenticationSchemes.Cookie)]
+    [Authorize(Policy = Policies.CanModifyStoreSettings, AuthenticationSchemes = AuthenticationSchemes.Cookie)]
     [AutoValidateAntiforgeryToken]
     public partial class StoresController : Controller
     {
@@ -59,7 +61,8 @@ namespace BTCPayServer.Controllers
             SettingsRepository settingsRepository,
             IAuthorizationService authorizationService,
             EventAggregator eventAggregator,
-            CssThemeManager cssThemeManager)
+            CssThemeManager cssThemeManager,
+            AppService appService)
         {
             _RateFactory = rateFactory;
             _Repo = repo;
@@ -75,6 +78,7 @@ namespace BTCPayServer.Controllers
             _settingsRepository = settingsRepository;
             _authorizationService = authorizationService;
             _CssThemeManager = cssThemeManager;
+            _appService = appService;
             _EventAggregator = eventAggregator;
             _NetworkProvider = networkProvider;
             _ExplorerProvider = explorerProvider;
@@ -102,6 +106,7 @@ namespace BTCPayServer.Controllers
         private readonly SettingsRepository _settingsRepository;
         private readonly IAuthorizationService _authorizationService;
         private readonly CssThemeManager _CssThemeManager;
+        private readonly AppService _appService;
         private readonly EventAggregator _EventAggregator;
 
         [TempData]
@@ -647,6 +652,7 @@ namespace BTCPayServer.Controllers
             return View(model);
         }
 
+
         [HttpGet]
         [Route("{storeId}/tokens/{tokenId}/revoke")]
         public async Task<IActionResult> RevokeToken(string tokenId)
@@ -673,7 +679,7 @@ namespace BTCPayServer.Controllers
                 TempData[WellKnownTempData.ErrorMessage] = "Failure to revoke this token";
             else
                 TempData[WellKnownTempData.SuccessMessage] = "Token revoked";
-            return RedirectToAction(nameof(ListTokens));
+            return RedirectToAction(nameof(ListTokens), new { storeId = token.StoreId});
         }
 
         [HttpGet]
@@ -780,13 +786,22 @@ namespace BTCPayServer.Controllers
 
         [HttpPost]
         [Route("{storeId}/tokens/apikey")]
-        public async Task<IActionResult> GenerateAPIKey(string storeId)
+        public async Task<IActionResult> GenerateAPIKey(string storeId, string command="")
         {
             var store = HttpContext.GetStoreData();
             if (store == null)
                 return NotFound();
-            await _TokenRepository.GenerateLegacyAPIKey(CurrentStore.Id);
-            TempData[WellKnownTempData.SuccessMessage] = "API Key re-generated";
+            if (command == "revoke")
+            {
+                await _TokenRepository.RevokeLegacyAPIKeys(CurrentStore.Id);
+                TempData[WellKnownTempData.SuccessMessage] = "API Key revoked";
+            }
+            else
+            {
+                await _TokenRepository.GenerateLegacyAPIKey(CurrentStore.Id);
+                TempData[WellKnownTempData.SuccessMessage] = "API Key re-generated";
+            }
+            
             return RedirectToAction(nameof(ListTokens), new
             {
                 storeId
@@ -878,7 +893,7 @@ namespace BTCPayServer.Controllers
         const string DEFAULT_CURRENCY = "USD";
 
         [Route("{storeId}/paybutton")]
-        public IActionResult PayButton()
+        public async Task<IActionResult> PayButton()
         {
             var store = CurrentStore;
 
@@ -888,6 +903,7 @@ namespace BTCPayServer.Controllers
                 return View("PayButtonEnable", null);
             }
 
+            var apps = await _appService.GetAllApps(_UserManager.GetUserId(User), false, store.Id);
             var appUrl = HttpContext.Request.GetAbsoluteRoot().WithTrailingSlash();
             var model = new PayButtonViewModel
             {
@@ -900,7 +916,8 @@ namespace BTCPayServer.Controllers
                 ButtonType = 0,
                 Min = 1,
                 Max = 20,
-                Step = 1
+                Step = 1,
+                Apps = apps
             };
             return View(model);
         }

@@ -186,11 +186,19 @@ namespace BTCPayServer
 
         public static bool IsSegwit(this DerivationStrategyBase derivationStrategyBase)
         {
-            if (IsSegwitCore(derivationStrategyBase))
-                return true;
-            return (derivationStrategyBase is P2SHDerivationStrategy p2shStrat && IsSegwitCore(p2shStrat.Inner));
+            return ScriptPubKeyType(derivationStrategyBase) != NBitcoin.ScriptPubKeyType.Legacy;
         }
+        public static ScriptPubKeyType ScriptPubKeyType(this DerivationStrategyBase derivationStrategyBase)
+        {
+            if (IsSegwitCore(derivationStrategyBase))
+            {
+                return NBitcoin.ScriptPubKeyType.Segwit;
+            }
 
+            return (derivationStrategyBase is P2SHDerivationStrategy p2shStrat && IsSegwitCore(p2shStrat.Inner))
+                ? NBitcoin.ScriptPubKeyType.SegwitP2SH
+                : NBitcoin.ScriptPubKeyType.Legacy;
+        }
         private static bool IsSegwitCore(DerivationStrategyBase derivationStrategyBase)
         {
             return (derivationStrategyBase is P2WSHDerivationStrategy) ||
@@ -257,6 +265,14 @@ namespace BTCPayServer
                 return false;
             return request.Host.Host.EndsWith(".onion", StringComparison.OrdinalIgnoreCase);
         }
+        
+        public static bool IsOnion(this Uri uri)
+        {
+            if (uri == null || !uri.IsAbsoluteUri)
+                return false;
+            return uri.DnsSafeHost.EndsWith(".onion", StringComparison.OrdinalIgnoreCase);
+        }
+
 
         public static string GetAbsoluteRoot(this HttpRequest request)
         {
@@ -407,6 +423,15 @@ namespace BTCPayServer
         public static void SetStoreData(this HttpContext ctx, StoreData storeData)
         {
             ctx.Items["BTCPAY.STOREDATA"] = storeData;
+        }
+
+        public static StoreData[] GetStoresData(this HttpContext ctx)
+        {
+            return ctx.Items.TryGet("BTCPAY.STORESDATA") as StoreData[];
+        }
+        public static void SetStoresData(this HttpContext ctx, StoreData[] storeData)
+        {
+            ctx.Items["BTCPAY.STORESDATA"] = storeData;
         }
 
         private static JsonSerializerSettings jsonSettings = new JsonSerializerSettings { ContractResolver = new CamelCasePropertyNamesContractResolver() };

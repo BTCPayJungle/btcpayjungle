@@ -177,7 +177,6 @@ namespace BTCPayServer.Controllers
                     OrderId = orderId,
                     NotificationURL =
                             string.IsNullOrEmpty(notificationUrl) ? settings.NotificationUrl : notificationUrl,
-                    NotificationEmail = settings.NotificationEmail,
                     RedirectURL = redirectUrl ?? Request.GetDisplayUrl(),
                     FullNotifications = true,
                     ExtendedNotifications = true,
@@ -238,6 +237,10 @@ namespace BTCPayServer.Controllers
         [EnableCors(CorsPolicies.All)]
         public async Task<IActionResult> ContributeToCrowdfund(string appId, ContributeToCrowdfund request, CancellationToken cancellationToken)
         {
+            if (request.Amount <= 0)
+            {
+                return NotFound("Please provide an amount greater than 0");
+            }
             var app = await _AppService.GetApp(appId, AppType.Crowdfund, true);
 
             if (app == null)
@@ -306,7 +309,6 @@ namespace BTCPayServer.Controllers
                         BuyerEmail = request.Email,
                         Price = price,
                         NotificationURL = settings.NotificationUrl,
-                        NotificationEmail = settings.NotificationEmail,
                         FullNotifications = true,
                         ExtendedNotifications = true,
                         RedirectURL = request.RedirectUrl ?? 

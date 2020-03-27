@@ -25,8 +25,6 @@ function updateFiatValueWithCurrentElement() {
 }
 
 $(function () {
-
-
     $(".output-amount").on("input", updateFiatValueWithCurrentElement).each(updateFiatValueWithCurrentElement);
 
     $("#crypto-fee-link").on("click", function (elem) {
@@ -37,11 +35,19 @@ $(function () {
 
     $(".crypto-balance-link").on("click", function (elem) {
         var val = $(this).text();
-        var parentContainer = $(this).parents(".transaction-output-form");
+        var parentContainer = $(this).parents(".form-group");
         var outputAmountElement = parentContainer.find(".output-amount");
         outputAmountElement.val(val);
         parentContainer.find(".subtract-fees").prop('checked', true);
         updateFiatValue(outputAmountElement);
         return false;
+    });
+
+    $("#bip21parse").on("click", function(){
+        var bip21 = prompt("Paste BIP21 here");
+        if(bip21){
+            $("#BIP21").val(bip21);
+            $("form").submit();
+        }
     });
 });

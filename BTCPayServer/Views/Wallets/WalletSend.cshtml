@@ -5,10 +5,18 @@
     ViewData["Title"] = "Manage wallet";
     ViewData.SetActivePageAndTitle(WalletsNavPages.Send);
 }
-
+@if (TempData.HasStatusMessage())
+{
+    <div class="row">
+        <div class="col-md-10 text-center">
+            <partial name="_StatusMessage" />
+        </div>
+    </div>
+}
 <div class="row">
-    <div class="@(Model.Outputs.Count==1? "col-lg-6 transaction-output-form": "col-lg-8")">
+    <div class="@(!Model.InputSelection && Model.Outputs.Count==1? "col-lg-6 transaction-output-form": "col-lg-8")">
         <form method="post">
+            <input type="hidden" asp-for="InputSelection" />
             <input type="hidden" asp-for="Divisibility" />
             <input type="hidden" asp-for="NBXSeedAvailable" />
             <input type="hidden" asp-for="Fiat" />
@@ -16,6 +24,7 @@
             <input type="hidden" asp-for="CurrentBalance" />
             <input type="hidden" asp-for="RecommendedSatoshiPerByte" />
             <input type="hidden" asp-for="CryptoCode" />
+            <input type="hidden" name="BIP21" id="BIP21" />
             <ul class="text-danger">
                 @foreach (var errors in ViewData.ModelState.Where(pair => pair.Key == string.Empty && pair.Value.ValidationState == ModelValidationState.Invalid))
                 {
@@ -26,6 +35,21 @@
                     }
                 }
             </ul>
+            
+            @if (Model.InputSelection)
+            {
+                <div class="form-group hide-when-js">
+                    <label asp-for="SelectedInputs"></label>
+                    <select multiple="multiple" asp-for="SelectedInputs" >
+                        @foreach (var input in Model.InputsAvailable)
+                        {
+                            <option value="@input.Outpoint" asp-selected="@(Model.SelectedInputs?.Contains(input.Outpoint)??false)">@input.Outpoint (@input.Amount)</option>
+                        }
+                    </select>
+                </div>
+                <partial name="CoinSelection"/>
+            }
+            
             @if (Model.Outputs.Count == 1)
             {
                 <div class="form-group">
@@ -118,8 +142,9 @@
                     </div>
                 </div>
             }
+            
             <div class="card">
-                <button class="btn btn-light collapsed" type="button" data-toggle="collapse" data-target="#accordian-advanced" aria-expanded="false" aria-controls="accordian-advanced">
+                <button id="advancedSettings" class="btn btn-light collapsed" type="button" data-toggle="collapse" data-target="#accordian-advanced" aria-expanded="false" aria-controls="accordian-advanced">
                     Advanced settings
                 </button>
                 <div id="accordian-advanced" class="collapse" aria-labelledby="accordian-advanced-header" data-parent="#accordian-advanced">
@@ -141,6 +166,9 @@
                                 </a>
                             </div>
                         }
+                        <div class="form-group">
+                            <button id="toggleInputSelection" type="submit" name="command" value="toggle-input-selection" class="btn btn-sm btn-secondary">Toggle coin selection</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -158,11 +186,12 @@
                         }
                         @if (Model.NBXSeedAvailable)
                         {
-                            <button name="command" type="submit" class="dropdown-item" value="nbx-seed">... the seed saved in NBXplorer</button>
+                            <button id="spendWithNBxplorer" name="command" type="submit" class="dropdown-item" value="nbx-seed">... the seed saved in NBXplorer</button>
                         }
                     </div>
                 </div>
                 <button type="submit" name="command" value="add-output" class="ml-1 btn btn-secondary">Add another destination </button>
+                <button type="button" id="bip21parse" class="ml-1 btn btn-secondary">Parse BIP21</button>
             </div>
         </form>
     </div>

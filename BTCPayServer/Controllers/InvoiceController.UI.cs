@@ -6,6 +6,7 @@ using System.Net.Mime;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
+using BTCPayServer.Client;
 using BTCPayServer.Data;
 using BTCPayServer.Events;
 using BTCPayServer.Filters;
@@ -65,7 +66,6 @@ namespace BTCPayServer.Controllers
                 BuyerInformation = invoice.BuyerInformation,
                 Fiat = _CurrencyNameTable.DisplayFormatCurrency(prodInfo.Price, prodInfo.Currency),
                 TaxIncluded = _CurrencyNameTable.DisplayFormatCurrency(prodInfo.TaxIncluded, prodInfo.Currency),
-                NotificationEmail = invoice.NotificationEmail,
                 NotificationUrl = invoice.NotificationURL?.AbsoluteUri,
                 RedirectUrl = invoice.RedirectURL?.AbsoluteUri,
                 ProductInformation = invoice.ProductInformation,
@@ -104,6 +104,7 @@ namespace BTCPayServer.Controllers
                 cryptoPayment.Paid = _CurrencyNameTable.DisplayFormatCurrency(accounting.CryptoPaid.ToDecimal(MoneyUnit.BTC), paymentMethodId.CryptoCode);
                 cryptoPayment.Overpaid = _CurrencyNameTable.DisplayFormatCurrency(accounting.OverpaidHelper.ToDecimal(MoneyUnit.BTC), paymentMethodId.CryptoCode);
                 var paymentMethodDetails = data.GetPaymentMethodDetails();
+                cryptoPayment.Address = paymentMethodDetails.GetPaymentDestination();
                 cryptoPayment.Rate = ExchangeRate(data);
                 model.CryptoPayments.Add(cryptoPayment);
             }
@@ -510,7 +511,7 @@ namespace BTCPayServer.Controllers
 
         [HttpPost]
         [Route("invoices/create")]
-        [Authorize(Policy = Policies.CanCreateInvoice.Key, AuthenticationSchemes = AuthenticationSchemes.Cookie)]
+        [Authorize(Policy = Policies.CanCreateInvoice, AuthenticationSchemes = AuthenticationSchemes.Cookie)]
         [BitpayAPIConstraint(false)]
         public async Task<IActionResult> CreateInvoice(CreateInvoiceModel model, CancellationToken cancellationToken)
         {
@@ -538,7 +539,6 @@ namespace BTCPayServer.Controllers
                     PosData = model.PosData,
                     OrderId = model.OrderId,
                     //RedirectURL = redirect + "redirect",
-                    NotificationEmail = model.NotificationEmail,
                     NotificationURL = model.NotificationUrl,
                     ItemDesc = model.ItemDesc,
                     FullNotifications = true,

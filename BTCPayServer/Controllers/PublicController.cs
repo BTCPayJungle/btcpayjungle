@@ -26,9 +26,17 @@ namespace BTCPayServer.Controllers
         private InvoiceController _InvoiceController;
         private StoreRepository _StoreRepository;
 
+        [HttpGet]
+        [IgnoreAntiforgeryToken]
+        [EnableCors(CorsPolicies.All)]
+        [Route("api/v1/invoices")]
+        public async Task<IActionResult> PayButtonHandle(PayButtonViewModel model)
+        {
+            return await PayButtonHandle(model, CancellationToken.None);
+        }
+        
         [HttpPost]
         [Route("api/v1/invoices")]
-        [MediaTypeAcceptConstraintAttribute("text/html")]
         [IgnoreAntiforgeryToken]
         [EnableCors(CorsPolicies.All)]
         public async Task<IActionResult> PayButtonHandle([FromForm]PayButtonViewModel model, CancellationToken cancellationToken)
@@ -68,6 +76,15 @@ namespace BTCPayServer.Controllers
             {
                 ModelState.AddModelError("Store", e.Message);
                 return View();
+            }
+            
+            if (model.JsonResponse)
+            {
+                return Json(new
+                {
+                    InvoiceId = invoice.Data.Id,
+                    InvoiceUrl = invoice.Data.Url
+                });
             }
 
             if (string.IsNullOrEmpty(model.CheckoutQueryString))

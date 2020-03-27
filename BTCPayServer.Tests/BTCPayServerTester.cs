@@ -32,7 +32,6 @@ using System.Security.Claims;
 using System.Security.Principal;
 using System.Text;
 using System.Threading;
-using OpenIddict.Abstractions;
 using Xunit;
 using BTCPayServer.Services;
 using System.Net.Http;
@@ -42,6 +41,12 @@ using AuthenticationSchemes = BTCPayServer.Security.AuthenticationSchemes;
 
 namespace BTCPayServer.Tests
 {
+    public enum TestDatabases
+    {
+        Postgres,
+        MySQL,
+    }
+
     public class BTCPayServerTester : IDisposable
     {
         private string _Directory;
@@ -65,6 +70,11 @@ namespace BTCPayServer.Tests
             set;
         }
 
+        public string MySQL
+        {
+            get; set;
+        }
+
         public string Postgres
         {
             get; set;
@@ -76,12 +86,17 @@ namespace BTCPayServer.Tests
             get; set;
         }
 
+        public TestDatabases TestDatabase
+        {
+            get; set;
+        }
 
         public bool MockRates { get; set; } = true;
 
         public HashSet<string> Chains { get; set; } = new HashSet<string>(){"BTC"};
         public bool UseLightning { get; set; }
-
+        public bool AllowAdminRegistration { get; set; } = true;
+        public bool DisableRegistration { get; set; } = false;
         public async Task StartAsync()
         {
             if (!Directory.Exists(_Directory))
@@ -123,7 +138,8 @@ namespace BTCPayServer.Tests
                 config.AppendLine($"lbtc.explorer.url={LBTCNBXplorerUri.AbsoluteUri}");
                 config.AppendLine($"lbtc.explorer.cookiefile=0");
             }
-            config.AppendLine("allow-admin-registration=1");
+            if (AllowAdminRegistration)
+                config.AppendLine("allow-admin-registration=1");
            
             config.AppendLine($"torrcfile={TestUtils.GetTestDataFullPath("Tor/torrc")}");
             config.AppendLine($"debuglog=debug.log");
@@ -136,7 +152,9 @@ namespace BTCPayServer.Tests
             if (!string.IsNullOrEmpty(SSHConnection))
                 config.AppendLine($"sshconnection={SSHConnection}");
 
-            if (Postgres != null)
+            if (TestDatabase == TestDatabases.MySQL && !String.IsNullOrEmpty(MySQL))
+                config.AppendLine($"mysql=" + MySQL);
+            else if (!String.IsNullOrEmpty(Postgres))
                 config.AppendLine($"postgres=" + Postgres);
             var confPath = Path.Combine(chainDirectory, "settings.config");
             await File.WriteAllTextAsync(confPath, config.ToString());
@@ -145,7 +163,7 @@ namespace BTCPayServer.Tests
             HttpClient = new HttpClient();
             HttpClient.BaseAddress = ServerUri;
             Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
-            var conf = new DefaultConfiguration() { Logger = Logs.LogProvider.CreateLogger("Console") }.CreateConfiguration(new[] { "--datadir", _Directory, "--conf", confPath, "--disable-registration", "false" });
+            var conf = new DefaultConfiguration() { Logger = Logs.LogProvider.CreateLogger("Console") }.CreateConfiguration(new[] { "--datadir", _Directory, "--conf", confPath, "--disable-registration", DisableRegistration ? "true" : "false" });
             _Host = new WebHostBuilder()
                     .UseConfiguration(conf)
                     .UseContentRoot(FindBTCPayServerDirectory())
@@ -205,6 +223,10 @@ namespace BTCPayServer.Tests
                 var bitfinex = new MockRateProvider();
                 bitfinex.ExchangeRates.Add(new PairRate(CurrencyPair.Parse("UST_BTC"), new BidAsk(0.000136m)));
                 rateProvider.Providers.Add("bitfinex", bitfinex);
+                
+                var bitpay = new MockRateProvider();
+                bitpay.ExchangeRates.Add(new PairRate(CurrencyPair.Parse("ETB_BTC"), new BidAsk(0.1m)));
+                rateProvider.Providers.Add("bitpay", bitpay);
             }
 
 
@@ -215,23 +237,13 @@ namespace BTCPayServer.Tests
 
         private async Task WaitSiteIsOperational()
         {
+            _ = HttpClient.GetAsync("/").ConfigureAwait(false);
             using (var cts = new CancellationTokenSource(20_000))
             {
                 var synching = WaitIsFullySynched(cts.Token);
-                var accessingHomepage = WaitCanAccessHomepage(cts.Token);
-                await Task.WhenAll(synching, accessingHomepage).ConfigureAwait(false);
+                await Task.WhenAll(synching).ConfigureAwait(false);
             }
-        }
-
-        private async Task WaitCanAccessHomepage(CancellationToken cancellationToken)
-        {
-            while (true)
-            {
-                var resp = await HttpClient.GetAsync("/", cancellationToken).ConfigureAwait(false);
-                if (resp.StatusCode == HttpStatusCode.OK)
-                    break;
-                await Task.Delay(10, cancellationToken).ConfigureAwait(false);
-            }
+            // Opportunistic call to wake up view compilation in debug mode, we don't need to await.
         }
 
         private async Task WaitIsFullySynched(CancellationToken cancellationToken)
@@ -281,7 +293,7 @@ namespace BTCPayServer.Tests
             if (userId != null)
             {
                 List<Claim> claims = new List<Claim>();
-                claims.Add(new Claim(OpenIddictConstants.Claims.Subject, userId));
+                claims.Add(new Claim(ClaimTypes.NameIdentifier, userId));
                 if (isAdmin)
                     claims.Add(new Claim(ClaimTypes.Role, Roles.ServerAdmin));
                 context.User = new ClaimsPrincipal(new ClaimsIdentity(claims.ToArray(), AuthenticationSchemes.Cookie));

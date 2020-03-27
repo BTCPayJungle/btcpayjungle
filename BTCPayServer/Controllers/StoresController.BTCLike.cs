@@ -22,6 +22,9 @@ using NBXplorer.DerivationStrategy;
 using NBXplorer.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using BTCPayServer.Logging;
+using Microsoft.Extensions.Logging;
+using BTCPayServer.Client;
 
 namespace BTCPayServer.Controllers
 {
@@ -141,8 +144,9 @@ namespace BTCPayServer.Controllers
         }
 
         [HttpPost]
-        [Route("{storeId}/derivations/{cryptoCode}")]
-        public async Task<IActionResult> AddDerivationScheme(string storeId, DerivationSchemeViewModel vm,
+        [Route("{storeId}/derivations/{cryptoCode}")]        
+        [ApiExplorerSettings(IgnoreApi = true)]
+        public async Task<IActionResult> AddDerivationScheme(string storeId, [FromForm] DerivationSchemeViewModel vm,
             string cryptoCode)
         {
             vm.CryptoCode = cryptoCode;
@@ -327,11 +331,15 @@ namespace BTCPayServer.Controllers
         public async Task<IActionResult> GenerateNBXWallet(string storeId, string cryptoCode,
             GenerateWalletRequest request)
         {
+            Logs.Events.LogInformation($"GenerateNBXWallet called {storeId}, {cryptoCode}, {request.ToJson()}");
+
             if (!await CanUseHotWallet())
             {
                 return NotFound();
             }
-            
+
+            Logs.Events.LogInformation($"GenerateNBXWallet after CanUseHotWallet");
+
             var network = _NetworkProvider.GetNetwork<BTCPayNetwork>(cryptoCode);
             var client = _ExplorerProvider.GetExplorerClient(cryptoCode);
             var response = await client.GenerateWalletAsync(request);
@@ -344,6 +352,9 @@ namespace BTCPayServer.Controllers
                 });
                 return RedirectToAction("AddDerivationScheme", new {storeId, cryptoCode});
             }
+
+            Logs.Events.LogInformation($"GenerateNBXWallet after GenerateWalletAsync");
+
             var store = HttpContext.GetStoreData();
             var result = await AddDerivationScheme(storeId,
                 new DerivationSchemeViewModel()
@@ -361,7 +372,7 @@ namespace BTCPayServer.Controllers
                     Enabled = !store.GetStoreBlob()
                         .IsExcluded(new PaymentMethodId(cryptoCode, PaymentTypes.BTCLike))
                 }, cryptoCode);
-            
+
             TempData.SetStatusMessageModel(new StatusMessageModel()
             {
                 Severity = StatusMessageModel.StatusSeverity.Success,
@@ -369,12 +380,14 @@ namespace BTCPayServer.Controllers
                     ? "Your wallet has been imported."
                     : $"Your wallet has been generated. Please store your seed securely! <br/><code>{response.Mnemonic}</code>"
             });
+
+            Logs.Events.LogInformation($"GenerateNBXWallet returning success result");
             return result;
         }
 
         private async Task<bool> CanUseHotWallet()
         {
-            var isAdmin = (await _authorizationService.AuthorizeAsync(User, BTCPayServer.Security.Policies.CanModifyServerSettings.Key)).Succeeded;
+            var isAdmin = (await _authorizationService.AuthorizeAsync(User, Policies.CanModifyServerSettings)).Succeeded;
             if (isAdmin)
                 return true;
             var policies = await _settingsRepository.GetSettingAsync<PoliciesSettings>();

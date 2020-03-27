@@ -11,11 +11,11 @@
 
 BTCPay Server is a free and open-source cryptocurrency payment processor which allows you to receive payments in Bitcoin and altcoins directly, with no fees, transaction cost or a middleman.
 
-BTCPay is a non-custodial invoicing system which eliminates the involvement of a third-party. Payments with BTCPay go directly to your wallet, which increases the privacy and security. Your private keys are never uploaded to the server. There is no address re-use, since each invoice generates a new address deriving from your xpubkey.
+BTCPay Server is a non-custodial invoicing system which eliminates the involvement of a third-party. Payments with BTCPay Server go directly to your wallet, which increases the privacy and security. Your private keys are never uploaded to the server. There is no address re-use, since each invoice generates a new address deriving from your xpubkey.
 
 The software is built in C# and conforms to the invoice [API of BitPay](https://bitpay.com/api). It allows for your website to be easily migrated from BitPay and configured as a self-hosted payment processor.
 
-You can run BTCPay as a self-hosted solution on your own server, or use a [third-party host](https://github.com/btcpayserver/btcpayserver-doc/blob/master/ThirdPartyHosting.md).
+You can run BTCPay Server as a self-hosted solution on your own server, or use a [third-party host](https://github.com/btcpayserver/btcpayserver-doc/blob/master/ThirdPartyHosting.md).
 
 The self-hosted solution allows you not only to attach an unlimited number of stores and use the Lightning Network but also become the payment processor for others.
 
@@ -36,25 +36,26 @@ Thanks to the [apps](https://github.com/btcpayserver/btcpayserver-doc/blob/maste
 
 ## Features
 
-* Direct, peer-to-peer Bitcoin and altcoin payments
-* No transaction fees (other than those for the crypto networks)
+* Direct, peer-to-peer Bitcoin payments
+* No transaction fees (other than the [network fee](https://en.bitcoin.it/wiki/Miner_fees))
 * No processing fees
 * No middleman
 * No KYC
-* User has complete control over private keys
+* Non-custodial (complete control over the private key)
 * Enhanced privacy
 * Enhanced security
 * Self-hosted
 * SegWit support
-* Lightning Network support (LND and c-lightning)
+* Lightning Network support (LND, c-lightning, Eclair and Ptarmigan)
 * Tor support
+* Opt-in [altcoin](https://github.com/btcpayserver/btcpayserver-doc/blob/master/Altcoins.md) integrations
 * Full compatibility with BitPay API (easy migration)
 * Process payments for others
 * Easy-embeddable Payment buttons
 * Point of sale app
 * Crowdfunding app
-* Payment requests
-* Internal Web Wallet
+* Payment Requests
+* Internal, full-node reliant wallet with [hardware wallet integration](https://github.com/btcpayserver/btcpayserver-doc/blob/master/Vault.md)
 
 ## Getting Started
 
@@ -71,6 +72,7 @@ If you have trouble using BTCPay, consider joining [communities listed on offici
 Main community chat is located on [Mattermost](https://chat.btcpayserver.org/).
 
 ## Contributing
+
 BTCPay is built and maintained entirely by volunteer contributors around the internet. We welcome and appreciate new contributions.
 
 If you're a developer looking to help, but you're not sure where to begin, check the [good first issue label](https://github.com/btcpayserver/btcpayserver/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22), which contains small pieces of work that have been specifically flagged as being friendly to new contributors.
@@ -79,16 +81,17 @@ Contributors looking to do something a bit more challenging, before opening a pu
 
 - [Setting up development environment on Windows](https://www.youtube.com/watch?v=ZePbMPSIvHM)
 - [Setting up development environment Linux (Ubuntu)](https://www.youtube.com/watch?v=j486T_Rk-yw&t)
+- [Setting up development environment MacOS](https://www.youtube.com/watch?v=GWR_CcMsEV0)
 
 You also have an awesome video of our contributors which explains how to get started.[![Rockstar Dev and Britt Kelly - Btc Pay Server Code Along](https://img.youtube.com/vi/ZePbMPSIvHM/sddefault.jpg)](https://www.youtube.com/embed/VNMnd-dX9Q8)
 
-Here is some info about [how to extend the themes](Docs/Themes.md)
+Here is some info about [how to extend the themes](https://github.com/btcpayserver/btcpayserver-doc/blob/master/Theme.md)
 
 ## How to build
 
-While the documentation advises to use docker-compose, you may want to build BTCPay yourself.
+While the documentation advises to use docker-compose, you may want to build BTCPay Server yourself.
 
-First install .NET Core SDK v2.1.9 as specified by [Microsoft website](https://www.microsoft.com/net/download/dotnet-core/2.1).
+First install .NET Core SDK v3.1 as specified by [Microsoft website](https://dotnet.microsoft.com/download/dotnet-core/3.1).
 
 On Powershell:
 ```
@@ -116,7 +119,7 @@ On linux:
 
 ## How to debug
 
-If you want to debug, use Visual Studio Code or Visual Studio 2017.
+If you want to debug, use Visual Studio Code or Visual Studio 2019.
 
 You need to run the development time docker-compose as described [in the test guide](BTCPayServer.Tests/README.md).
 
@@ -139,6 +142,10 @@ For more information, see the documentation: [How to deploy a BTCPay server inst
 
 Bitcoin is the only focus of the project and its core developers. However, opt in integrations are present for [several altcoins](https://github.com/btcpayserver/btcpayserver-doc/blob/master/Altcoins.md). Altcoins are maintained by their respective communities.
 
+## License
+
+BTCPay Server software, logo and designs are provided under [MIT License](https://github.com/btcpayserver/btcpayserver/blob/master/LICENSE).
+
 ## Supporters
 
 The BTCPay Server Project is proudly supported by these entities through the [BTCPay Server Foundation](https://foundation.btcpayserver.org/).
@@ -151,6 +158,13 @@ The BTCPay Server Project is proudly supported by these entities through the [BT
           <img  src="BTCPayServer/wwwroot/img/squarecrypto.svg" alt="Square Crypto" height=100>
           <br/>
           <span>Square Crypto</span>
+        </a>
+      </td>
+      <td align="center" valign="middle">
+        <a href="https://www.btse.com" target="_blank">
+          <img  src="BTCPayServer/wwwroot/img/btse.svg" alt="BTSE" height=100>
+          <br/>
+          <span>BTSE</span>
         </a>
       </td>
       <td align="center" valign="middle">

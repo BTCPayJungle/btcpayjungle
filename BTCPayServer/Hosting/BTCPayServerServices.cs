@@ -32,6 +32,7 @@ using BTCPayServer.Payments.Bitcoin;
 using BTCPayServer.Payments.Changelly;
 using BTCPayServer.Payments.Lightning;
 using BTCPayServer.Security;
+using BTCPayServer.Security.APIKeys;
 using BTCPayServer.Services.PaymentRequests;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using NBXplorer.DerivationStrategy;
@@ -40,17 +41,6 @@ using Npgsql;
 using BTCPayServer.Services.Apps;
 using BTCPayServer.U2F;
 using BundlerMinifier.TagHelpers;
-using OpenIddict.EntityFrameworkCore.Models;
-
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Security.Claims;
-using System.Threading.Tasks;
-using BTCPayServer.Models;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Identity;
-using Microsoft.AspNetCore.Routing;
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using BTCPayServer.Security.Bitpay;
 using Serilog;
@@ -66,7 +56,6 @@ namespace BTCPayServer.Hosting
             {
                 var factory = provider.GetRequiredService<ApplicationDbContextFactory>();
                 factory.ConfigureBuilder(o);
-                o.UseOpenIddict<BTCPayOpenIdClient, BTCPayOpenIdAuthorization, OpenIddictScope<string>, BTCPayOpenIdToken, string>();
             });
             services.AddHttpClient();
             services.AddHttpClient(nameof(ExplorerClientProvider), httpClient =>
@@ -214,13 +203,13 @@ namespace BTCPayServer.Hosting
             services.AddSingleton<IHostedService, BackgroundJobSchedulerHostedService>();
             services.AddSingleton<IHostedService, AppHubStreamer>();
             services.AddSingleton<IHostedService, AppInventoryUpdaterHostedService>();
+            services.AddSingleton<IHostedService, UserEventHostedService>();
             services.AddSingleton<IHostedService, DynamicDnsHostedService>();
             services.AddSingleton<IHostedService, TorServicesHostedService>();
             services.AddSingleton<IHostedService, PaymentRequestStreamer>();
             services.AddSingleton<IHostedService, WalletReceiveCacheUpdater>();
             services.AddSingleton<IBackgroundJobClient, BackgroundJobClient>();
             services.AddScoped<IAuthorizationHandler, CookieAuthorizationHandler>();
-            services.AddScoped<IAuthorizationHandler, OpenIdAuthorizationHandler>();
             services.AddScoped<IAuthorizationHandler, BitpayAuthorizationHandler>();
 
             services.TryAddSingleton<ExplorerClientProvider>();
@@ -241,11 +230,11 @@ namespace BTCPayServer.Hosting
             services.AddTransient<PaymentRequestController>();
             // Add application services.
             services.AddSingleton<EmailSenderFactory>();
-            // bundling
-
-            services.AddBtcPayServerAuthenticationSchemes(configuration);
+            
+            services.AddAPIKeyAuthentication();
+            services.AddBtcPayServerAuthenticationSchemes();
             services.AddAuthorization(o => o.AddBTCPayPolicies());
-
+            // bundling
             services.AddSingleton<IBundleProvider, ResourceBundleProvider>();
             services.AddTransient<BundleOptions>(provider =>
             {
@@ -260,12 +249,22 @@ namespace BTCPayServer.Hosting
             {
                 options.AddPolicy(CorsPolicies.All, p => p.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin());
             });
-
-            var rateLimits = new RateLimitService();
-            rateLimits.SetZone($"zone={ZoneLimits.Login} rate=5r/min burst=3 nodelay");
-            services.AddSingleton(rateLimits);
-
-
+            services.AddSingleton(provider =>
+            {
+                var btcPayEnv = provider.GetService<BTCPayServerEnvironment>();
+                var rateLimits = new RateLimitService();
+                if (btcPayEnv.IsDevelopping)
+                {
+                    rateLimits.SetZone($"zone={ZoneLimits.Login} rate=1000r/min burst=100 nodelay");
+                    rateLimits.SetZone($"zone={ZoneLimits.Register} rate=1000r/min burst=100 nodelay");
+                }
+                else
+                {
+                    rateLimits.SetZone($"zone={ZoneLimits.Login} rate=5r/min burst=3 nodelay");
+                    rateLimits.SetZone($"zone={ZoneLimits.Register} rate=2r/min burst=2 nodelay");
+                }
+                return rateLimits;
+            });
             services.AddLogging(logBuilder =>
             {
                 var debugLogFile = BTCPayServerOptions.GetDebugLog(configuration);
@@ -282,12 +281,12 @@ namespace BTCPayServer.Hosting
             return services;
         }
         private const long MAX_DEBUG_LOG_FILE_SIZE = 2000000; // If debug log is in use roll it every N MB.
-        private static void AddBtcPayServerAuthenticationSchemes(this IServiceCollection services,
-            IConfiguration configuration)
+        private static void AddBtcPayServerAuthenticationSchemes(this IServiceCollection services)
         {
             services.AddAuthentication()
                 .AddCookie()
-                .AddBitpayAuthentication();
+                .AddBitpayAuthentication()
+                .AddAPIKeyAuthentication();
         }
 
         public static IApplicationBuilder UsePayServer(this IApplicationBuilder app)

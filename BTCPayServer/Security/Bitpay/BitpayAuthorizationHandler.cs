@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.AspNetCore.Authentication;
 using BTCPayServer.Services;
 using BTCPayServer.Security.Bitpay;
+using BTCPayServer.Client;
 
 namespace BTCPayServer.Security.Bitpay
 {
@@ -54,7 +55,7 @@ namespace BTCPayServer.Security.Bitpay
             var anyoneCanInvoice = store.GetStoreBlob().AnyoneCanInvoice;
             switch (requirement.Policy)
             {
-                case Policies.CanCreateInvoice.Key:
+                case Policies.CanCreateInvoice:
                     if (!isAnonymous || (isAnonymous && anyoneCanInvoice))
                     {
                         context.Succeed(requirement);
@@ -62,7 +63,7 @@ namespace BTCPayServer.Security.Bitpay
                         return;
                     }
                     break;
-                case Policies.CanGetRates.Key:
+                case ServerPolicies.CanGetRates.Key:
                     context.Succeed(requirement);
                     _HttpContext.SetStoreData(store);
                     return;

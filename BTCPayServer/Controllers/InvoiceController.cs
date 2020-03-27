@@ -74,7 +74,11 @@ namespace BTCPayServer.Controllers
             var getAppsTaggingStore = _InvoiceRepository.GetAppsTaggingStore(store.Id);
             var storeBlob = store.GetStoreBlob();
             EmailAddressAttribute emailValidator = new EmailAddressAttribute();
-            entity.ExpirationTime = entity.InvoiceTime.AddMinutes(storeBlob.InvoiceExpiration);
+            entity.ExpirationTime = invoice.ExpirationTime is DateTimeOffset v ? v : entity.InvoiceTime.AddMinutes(storeBlob.InvoiceExpiration);
+            if (entity.ExpirationTime - TimeSpan.FromSeconds(30.0) < entity.InvoiceTime)
+            {
+                throw new BitpayHttpException(400, "The expirationTime is set too soon");
+            }
             entity.MonitoringExpiration = entity.ExpirationTime + TimeSpan.FromMinutes(storeBlob.MonitoringExpiration);
             entity.OrderId = invoice.OrderId;
             entity.ServerUrl = serverUrl;
@@ -150,6 +154,7 @@ namespace BTCPayServer.Controllers
             var rateRules = storeBlob.GetRateRules(_NetworkProvider);
             var fetchingByCurrencyPair = _RateProvider.FetchRates(currencyPairsToFetch, rateRules, cancellationToken);
             var fetchingAll = WhenAllFetched(logs, fetchingByCurrencyPair);
+
             var supportedPaymentMethods = store.GetSupportedPaymentMethods(_NetworkProvider)
                                                .Where(s => !excludeFilter.Match(s.PaymentId) && _paymentMethodHandlerDictionary.Support(s.PaymentId))
                                                .Select(c =>
@@ -175,7 +180,8 @@ namespace BTCPayServer.Controllers
             if (supported.Count == 0)
             {
                 StringBuilder errors = new StringBuilder();
-                errors.AppendLine("Warning: No wallet has been linked to your BTCPay Store. See the following link for more information on how to connect your store and wallet. (https://docs.btcpayserver.org/getting-started/connectwallet)");
+                if (!store.GetSupportedPaymentMethods(_NetworkProvider).Any())
+                    errors.AppendLine("Warning: No wallet has been linked to your BTCPay Store. See the following link for more information on how to connect your store and wallet. (https://docs.btcpayserver.org/getting-started/connectwallet)");
                 foreach (var error in logs.ToList())
                 {
                     errors.AppendLine(error.ToString());
