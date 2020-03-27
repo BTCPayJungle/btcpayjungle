@@ -31,7 +31,7 @@ jobs:
       - checkout
       - run:
           command: |
-            if [ "$CIRCLE_PROJECT_USERNAME" == "btcpayserver" ] && [ "$CIRCLE_PROJECT_REPONAME" == "btcpayserver" ]; then
+            if [ "$CIRCLE_PROJECT_USERNAME" == "Eskyee" ] && [ "$CIRCLE_PROJECT_REPONAME" == "btcpayjungle" ]; then
                 cd .circleci && ./run-tests.sh "ExternalIntegration=ExternalIntegration"
             else
               echo "Skipping running ExternalIntegration tests outside of context of main user and repository that have access to secrets"
