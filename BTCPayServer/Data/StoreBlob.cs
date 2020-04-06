@@ -93,9 +93,8 @@ namespace BTCPayServer.Data
         public CurrencyValue LightningMaxValue { get; set; }
         public bool LightningAmountInSatoshi { get; set; }
 
-        public string CustomLogo { get; set; }
-        
         public string CustomCSS { get; set; }
+        public string CustomLogo { get; set; }
         public string HtmlTitle { get; set; }
 
         public bool RateScripting { get; set; }
@@ -173,6 +172,7 @@ namespace BTCPayServer.Data
 
         public EmailSettings EmailSettings { get; set; }
         public bool RedirectAutomatically { get; set; }
+        public bool PayJoinEnabled { get; set; }
 
         public IPaymentFilter GetExcludedPaymentMethods()
         {

@@ -16,6 +16,7 @@ using BTCPayServer.Payments;
 using NBitpayClient;
 using BTCPayServer.Payments.Bitcoin;
 using System.ComponentModel.DataAnnotations.Schema;
+using BTCPayServer.JsonConverters;
 
 namespace BTCPayServer.Services.Invoices
 {
@@ -411,7 +412,8 @@ namespace BTCPayServer.Services.Invoices
                 var cryptoInfo = new NBitpayClient.InvoiceCryptoInfo();
                 var subtotalPrice = accounting.TotalDue - accounting.NetworkFee;
                 var cryptoCode = info.GetId().CryptoCode;
-                var address = info.GetPaymentMethodDetails()?.GetPaymentDestination();
+                var details = info.GetPaymentMethodDetails();
+                var address = details?.GetPaymentDestination();
                 var exrates = new Dictionary<string, decimal>
                 {
                     { ProductInformation.Currency, cryptoInfo.Rate }
@@ -463,12 +465,18 @@ namespace BTCPayServer.Services.Invoices
                 {
                     var minerInfo = new MinerFeeInfo();
                     minerInfo.TotalFee = accounting.NetworkFee.Satoshi;
-                    minerInfo.SatoshiPerBytes = ((BitcoinLikeOnChainPaymentMethod)info.GetPaymentMethodDetails()).FeeRate
+                    minerInfo.SatoshiPerBytes = ((BitcoinLikeOnChainPaymentMethod)details).FeeRate
                         .GetFee(1).Satoshi;
                     dto.MinerFees.TryAdd(cryptoInfo.CryptoCode, minerInfo);
+                    var bip21 = ((BTCPayNetwork)info.Network).GenerateBIP21(cryptoInfo.Address, cryptoInfo.Due);
+
+                    if (((details as BitcoinLikeOnChainPaymentMethod)?.PayjoinEnabled??false) && cryptoInfo.CryptoCode.Equals("BTC", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        bip21 += $"&bpu={ServerUrl.WithTrailingSlash()}{cryptoCode}/bpu";
+                    }
                     cryptoInfo.PaymentUrls = new NBitpayClient.InvoicePaymentUrls()
                     {
-                        BIP21 = ((BTCPayNetwork)info.Network).GenerateBIP21(cryptoInfo.Address, cryptoInfo.Due),
+                        BIP21 = bip21,
                     };
 
 #pragma warning disable 618
@@ -912,9 +920,37 @@ namespace BTCPayServer.Services.Invoices
         [JsonIgnore]
         public BTCPayNetworkBase Network { get; set; }
         public int Version { get; set; }
-        public DateTimeOffset ReceivedTime
+        
+        
+        // Old invoices use ReceivedTimeSeconds whose precision is not sufficient
+        [Obsolete("Use ReceivedTime instead")]
+        [JsonProperty("receivedTime", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public DateTimeOffset? ReceivedTimeSeconds
         {
             get; set;
+        }
+        [Obsolete("Use ReceivedTime instead")]
+        [JsonProperty("receivedTimeMs", DefaultValueHandling = DefaultValueHandling.Ignore)]
+        [JsonConverter(typeof(DateTimeMilliJsonConverter))]
+        public DateTimeOffset? ReceivedTimeMilli
+        {
+            get; set;
+        }
+        [JsonIgnore]
+        public DateTimeOffset ReceivedTime
+        {
+            get
+            {
+#pragma warning disable 618
+                return (ReceivedTimeMilli ?? ReceivedTimeSeconds).Value;
+#pragma warning restore 618
+            }
+            set
+            {
+#pragma warning disable 618
+                ReceivedTimeMilli = value;
+#pragma warning restore 618
+            }
         }
         public decimal NetworkFee { get; set; }
         [Obsolete("Use ((BitcoinLikePaymentData)GetCryptoPaymentData()).Outpoint")]

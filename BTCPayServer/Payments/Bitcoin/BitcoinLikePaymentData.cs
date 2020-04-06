@@ -37,9 +37,11 @@ namespace BTCPayServer.Payments.Bitcoin
         public TxOut Output { get; set; }
         public int ConfirmationCount { get; set; }
         public bool RBF { get; set; }
-        public decimal NetworkFee { get; set; }
         public BitcoinAddress Address { get; set; }
         public IMoney Value { get; set; }
+
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public PayjoinInformation PayjoinInformation { get; set; }
 
         [JsonIgnore]
         public Script ScriptPubKey
@@ -67,7 +69,7 @@ namespace BTCPayServer.Payments.Bitcoin
 
         public decimal GetValue()
         {
-            return Value?.GetValue(Network as BTCPayNetwork)??Output.Value.ToDecimal(MoneyUnit.BTC);
+            return Value?.GetValue(Network as BTCPayNetwork) ?? Output.Value.ToDecimal(MoneyUnit.BTC);
         }
 
         public bool PaymentCompleted(PaymentEntity entity)
@@ -105,5 +107,13 @@ namespace BTCPayServer.Payments.Bitcoin
         {
             return GetDestination().ToString();
         }
+    }
+
+
+    public class PayjoinInformation
+    {
+        public uint256 CoinjoinTransactionHash { get; set; }
+        public Money CoinjoinValue { get; set; }
+        public OutPoint[] ContributedOutPoints { get; set; }
     }
 }

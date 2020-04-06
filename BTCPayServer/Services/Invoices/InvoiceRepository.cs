@@ -292,6 +292,21 @@ retry:
             }
         }
 
+        public async Task UpdateInvoicePaymentMethod(string invoiceId, PaymentMethod paymentMethod)
+        {
+            using (var context = _ContextFactory.CreateContext())
+            {
+                var invoice = await context.Invoices.FindAsync(invoiceId);
+                if (invoice == null)
+                    return;
+                var network = paymentMethod.Network;
+                var invoiceEntity = ToObject(invoice.Blob);
+                invoiceEntity.SetPaymentMethod(paymentMethod);
+                invoice.Blob = ToBytes(invoiceEntity, network);
+                await context.SaveChangesAsync();
+            }
+        }
+
         public async Task AddPendingInvoiceIfNotPresent(string invoiceId)
         {
             using (var context = _ContextFactory.CreateContext())
@@ -299,7 +314,11 @@ retry:
                 if (!context.PendingInvoices.Any(a => a.Id == invoiceId))
                 {
                     context.PendingInvoices.Add(new PendingInvoiceData() { Id = invoiceId });
-                    await context.SaveChangesAsync();
+                    try
+                    {
+                        await context.SaveChangesAsync();
+                    }
+                    catch (DbUpdateException) { } // Already exists
                 }
             }
         }
