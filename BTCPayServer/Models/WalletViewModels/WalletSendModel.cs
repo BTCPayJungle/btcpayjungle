@@ -1,10 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Threading.Tasks;
-using BTCPayServer.Data;
-using NBXplorer.Models;
+using BTCPayServer.Services.Labels;
 
 namespace BTCPayServer.Models.WalletViewModels
 {
@@ -48,7 +44,7 @@ namespace BTCPayServer.Models.WalletViewModels
         public bool DisableRBF { get; set; }
 
         public bool NBXSeedAvailable { get; set; }
-        [Display(Name = "PayJoin Endpoint Url (BIP79)")]
+        [Display(Name = "PayJoin Endpoint Url")]
         public string PayJoinEndpointUrl { get; set; }
         public bool InputSelection { get; set; }
         public InputSelectionOption[] InputsAvailable { get; set; }

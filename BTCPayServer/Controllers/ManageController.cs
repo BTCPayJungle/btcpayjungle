@@ -149,7 +149,7 @@ namespace BTCPayServer.Controllers
         {
             if (!ModelState.IsValid)
             {
-                return View(model);
+                return View(nameof(Index), model);
             }
 
             var user = await _userManager.GetUserAsync(User);
@@ -159,7 +159,7 @@ namespace BTCPayServer.Controllers
             }
 
             var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            var callbackUrl = _linkGenerator.EmailConfirmationLink(user.Id, code, Request.Scheme, Request.HttpContext);
+            var callbackUrl = _linkGenerator.EmailConfirmationLink(user.Id, code, Request.Scheme, Request.Host, Request.PathBase);
             var email = user.Email;
             _EmailSenderFactory.GetEmailSender().SendEmailConfirmation(email, callbackUrl);
             TempData[WellKnownTempData.SuccessMessage] = "Verification email sent. Please check your email.";

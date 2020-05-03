@@ -19,8 +19,10 @@ using System.Threading.Tasks;
 using BTCPayServer.Lightning;
 using BTCPayServer.Lightning.CLightning;
 using BTCPayServer.Models;
+using BTCPayServer.Services;
 using BTCPayServer.Views.Manage;
 using BTCPayServer.Views.Stores;
+using BTCPayServer.Views.Wallets;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using OpenQA.Selenium.Interactions;
@@ -122,7 +124,7 @@ namespace BTCPayServer.Tests
         }
         
 
-        public Mnemonic GenerateWallet(string cryptoCode = "BTC", string seed = "", bool importkeys = false, bool privkeys = false)
+        public Mnemonic GenerateWallet(string cryptoCode = "BTC", string seed = "", bool importkeys = false, bool privkeys = false, ScriptPubKeyType format = ScriptPubKeyType.Segwit)
         {
             Driver.FindElement(By.Id($"Modify{cryptoCode}")).ForceClick();
             Driver.FindElement(By.Id("import-from-btn")).ForceClick();
@@ -130,6 +132,8 @@ namespace BTCPayServer.Tests
             Driver.WaitForElement(By.Id("ExistingMnemonic")).SendKeys(seed);
             SetCheckbox(Driver.WaitForElement(By.Id("SavePrivateKeys")), privkeys);
             SetCheckbox(Driver.WaitForElement(By.Id("ImportKeysToRPC")), importkeys);
+            Driver.WaitForElement(By.Id("ScriptPubKeyType")).Click();
+            Driver.WaitForElement(By.CssSelector($"#ScriptPubKeyType option[value={format}]")).Click();
             Logs.Tester.LogInformation("Trying to click btn-generate");
             Driver.WaitForElement(By.Id("btn-generate")).ForceClick();
             AssertHappyMessage();
@@ -137,8 +141,6 @@ namespace BTCPayServer.Tests
             {
                 seed = Driver.FindElements(By.ClassName("alert-success")).First().FindElement(By.TagName("code")).Text;
             }
-            Driver.FindElement(By.Id("Confirm")).ForceClick();
-            AssertHappyMessage();
             return new Mnemonic(seed);
         }
 
@@ -297,7 +299,7 @@ namespace BTCPayServer.Tests
             Driver.FindElement(By.Id("CreateNewInvoice")).Click();
         }
 
-        public string CreateInvoice(string store, decimal amount = 100, string currency = "USD", string refundEmail = "")
+        public string CreateInvoice(string storeName, decimal amount = 100, string currency = "USD", string refundEmail = "")
         {
             GoToInvoices();
             Driver.FindElement(By.Id("CreateNewInvoice")).Click();
@@ -306,7 +308,7 @@ namespace BTCPayServer.Tests
             currencyEl.Clear();
             currencyEl.SendKeys(currency);
             Driver.FindElement(By.Id("BuyerEmail")).SendKeys(refundEmail);
-            Driver.FindElement(By.Name("StoreId")).SendKeys(store + Keys.Enter);
+            Driver.FindElement(By.Name("StoreId")).SendKeys(storeName + Keys.Enter);
             Driver.FindElement(By.Id("Create")).ForceClick();
             Assert.True(Driver.PageSource.Contains("just created!"), "Unable to create Invoice");
             var statusElement = Driver.FindElement(By.ClassName("alert-success"));
@@ -317,7 +319,7 @@ namespace BTCPayServer.Tests
 
         public async Task FundStoreWallet(WalletId walletId, int coins = 1, decimal denomination = 1m)
         {
-            GoToWalletReceive(walletId);
+            GoToWallet(walletId, WalletsNavPages.Receive);
             Driver.FindElement(By.Id("generateButton")).Click();
             var addressStr = Driver.FindElement(By.Id("vue-address")).GetProperty("value");
             var address = BitcoinAddress.Create(addressStr, ((BTCPayNetwork)Server.NetworkProvider.GetNetwork(walletId.CryptoCode)).NBitcoinNetwork);
@@ -332,9 +334,9 @@ namespace BTCPayServer.Tests
             GoToInvoiceCheckout(invoiceId);
             var bip21 = Driver.FindElement(By.ClassName("payment__details__instruction__open-wallet__btn"))
                 .GetAttribute("href");
-            Assert.Contains("bpu", bip21);
+            Assert.Contains($"{PayjoinClient.BIP21EndpointKey}", bip21);
                
-            GoToWalletSend(walletId);
+            GoToWallet(walletId, WalletsNavPages.Send);
             Driver.FindElement(By.Id("bip21parse")).Click();
             Driver.SwitchTo().Alert().SendKeys(bip21);
             Driver.SwitchTo().Alert().Accept();
@@ -370,14 +372,13 @@ namespace BTCPayServer.Tests
 
         }
 
-        public void GoToWalletSend(WalletId walletId)
+        public void GoToWallet(WalletId walletId, WalletsNavPages navPages = WalletsNavPages.Send)
         {
-            Driver.Navigate().GoToUrl(new Uri(Server.PayTester.ServerUri, $"wallets/{walletId}/send"));
-        }
-
-        internal void GoToWalletReceive(WalletId walletId)
-        {
-            Driver.Navigate().GoToUrl(new Uri(Server.PayTester.ServerUri, $"wallets/{walletId}/receive"));
+            Driver.Navigate().GoToUrl(new Uri(Server.PayTester.ServerUri, $"wallets/{walletId}"));
+            if (navPages != WalletsNavPages.Transactions)
+            {
+                Driver.FindElement(By.Id($"Wallet{navPages}")).Click();
+            }
         }
     }
 }

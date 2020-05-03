@@ -19,6 +19,9 @@ stages:
     pool:
       vmImage: 'ubuntu-latest'
     steps:
+    - task: KubectlInstaller@0
+      inputs:
+        kubectlVersion: 'latest'
     - task: Docker@2
       displayName: Build an image
       inputs:

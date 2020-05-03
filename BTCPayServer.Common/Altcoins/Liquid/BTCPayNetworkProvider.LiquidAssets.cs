@@ -26,7 +26,8 @@ namespace BTCPayServer
                 CryptoImagePath = "imlegacy/liquid-tether.svg",
                 DefaultSettings = BTCPayDefaultSettings.GetDefaultSettings(NetworkType),
                 CoinType = NetworkType == NetworkType.Mainnet ? new KeyPath("1776'") : new KeyPath("1'"),
-                SupportRBF = true
+                SupportRBF = true,
+                SupportLightning = false
             });
             
             Add(new ElementsBTCPayNetwork()
@@ -49,7 +50,31 @@ namespace BTCPayServer
                 CryptoImagePath = "imlegacy/etb.png",
                 DefaultSettings = BTCPayDefaultSettings.GetDefaultSettings(NetworkType),
                 CoinType = NetworkType == NetworkType.Mainnet ? new KeyPath("1776'") : new KeyPath("1'"),
-                SupportRBF = true
+                SupportRBF = true,
+                SupportLightning = false
+            });
+            
+              Add(new ElementsBTCPayNetwork()
+            {
+                CryptoCode = "LCAD",
+                NetworkCryptoCode = "LBTC",
+                ShowSyncSummary = false,
+                DefaultRateRules = new[]
+                {
+                    "LCAD_CAD = 1",
+                    "LCAD_X = CAD_BTC * BTC_X",
+                    "LCAD_BTC = bylls(CAD_BTC)",
+                },
+                AssetId = new uint256("0e99c1a6da379d1f4151fb9df90449d40d0608f6cb33a5bcbfc8c265f42bab0a"),
+                DisplayName = "Liquid CAD",
+                BlockExplorerLink = NetworkType == NetworkType.Mainnet ? "https://blockstream.info/liquid/tx/{0}" : "https://blockstream.info/testnet/liquid/tx/{0}",
+                NBXplorerNetwork = nbxplorerNetwork,
+                UriScheme = "liquidnetwork",
+                CryptoImagePath = "imlegacy/lcad.png",
+                DefaultSettings = BTCPayDefaultSettings.GetDefaultSettings(NetworkType),
+                CoinType = NetworkType == NetworkType.Mainnet ? new KeyPath("1776'") : new KeyPath("1'"),
+                SupportRBF = true,
+                SupportLightning = false
             });
         }
     }

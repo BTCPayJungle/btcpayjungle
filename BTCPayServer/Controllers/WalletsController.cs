@@ -16,6 +16,7 @@ using BTCPayServer.Models.WalletViewModels;
 using BTCPayServer.Payments;
 using BTCPayServer.Security;
 using BTCPayServer.Services;
+using BTCPayServer.Services.Labels;
 using BTCPayServer.Services.Rates;
 using BTCPayServer.Services.Stores;
 using BTCPayServer.Services.Wallets;
@@ -52,6 +53,7 @@ namespace BTCPayServer.Controllers
         private readonly SettingsRepository _settingsRepository;
         private readonly DelayedTransactionBroadcaster _broadcaster;
         private readonly PayjoinClient _payjoinClient;
+        private readonly LabelFactory _labelFactory;
         public RateFetcher RateFetcher { get; }
 
         CurrencyNameTable _currencyTable;
@@ -71,7 +73,8 @@ namespace BTCPayServer.Controllers
                                  EventAggregator eventAggregator,
                                  SettingsRepository settingsRepository,
                                  DelayedTransactionBroadcaster broadcaster,
-                                 PayjoinClient payjoinClient)
+                                 PayjoinClient payjoinClient,
+                                 LabelFactory labelFactory)
         {
             _currencyTable = currencyTable;
             Repository = repo;
@@ -90,6 +93,7 @@ namespace BTCPayServer.Controllers
             _settingsRepository = settingsRepository;
             _broadcaster = broadcaster;
             _payjoinClient = payjoinClient;
+            _labelFactory = labelFactory;
         }
 
         // Borrowed from https://github.com/ManageIQ/guides/blob/master/labels.md
@@ -143,8 +147,8 @@ namespace BTCPayServer.Controllers
             var walletTransactionsInfo = await walletTransactionsInfoAsync;
             if (addlabel != null)
             {
-                addlabel = addlabel.Trim().ToLowerInvariant().Replace(',',' ').Truncate(MaxLabelSize);
-                var labels = walletBlobInfo.GetLabels();
+                addlabel = addlabel.Trim().TrimStart('{').ToLowerInvariant().Replace(',',' ').Truncate(MaxLabelSize);
+                var labels = _labelFactory.GetLabels(walletBlobInfo, Request);
                 if (!walletTransactionsInfo.TryGetValue(transactionId, out var walletTransactionInfo))
                 {
                     walletTransactionInfo = new WalletTransactionInfo();
@@ -170,7 +174,7 @@ namespace BTCPayServer.Controllers
             }
             else if (removelabel != null)
             {
-                removelabel = removelabel.Trim().ToLowerInvariant().Truncate(MaxLabelSize);
+                removelabel = removelabel.Trim();
                 if (walletTransactionsInfo.TryGetValue(transactionId, out var walletTransactionInfo))
                 {
                     if (walletTransactionInfo.Labels.Remove(removelabel))
@@ -286,7 +290,7 @@ namespace BTCPayServer.Controllers
 
                     if (walletTransactionsInfo.TryGetValue(tx.TransactionId.ToString(), out var transactionInfo))
                     {
-                        var labels = walletBlob.GetLabels(transactionInfo);
+                        var labels =  _labelFactory.GetLabels(walletBlob, transactionInfo, Request);
                         vm.Labels.AddRange(labels);
                         model.Labels.AddRange(labels);
                         vm.Comment = transactionInfo.Comment;
@@ -469,7 +473,6 @@ namespace BTCPayServer.Controllers
             if (!string.IsNullOrEmpty(bip21))
             {
                 LoadFromBIP21(vm, bip21, network);
-                return View(vm);
             }
             
             decimal transactionAmountSum  = 0;
@@ -492,7 +495,7 @@ namespace BTCPayServer.Controllers
                         Outpoint = coin.OutPoint.ToString(),
                         Amount = coin.Value.GetValue(network),
                         Comment = info?.Comment,
-                        Labels = info == null? null :walletBlobAsync.GetLabels(info),
+                        Labels = info == null? null : _labelFactory.GetLabels(walletBlobAsync, info, Request),
                         Link = string.Format(CultureInfo.InvariantCulture, network.BlockExplorerLink, coin.OutPoint.Hash.ToString())
                     };
                 }).ToArray();
@@ -501,6 +504,11 @@ namespace BTCPayServer.Controllers
             if (command == "toggle-input-selection")
             {
                 ModelState.Clear();
+                return View(vm);
+            }
+
+            if (!string.IsNullOrEmpty(bip21))
+            {
                 return View(vm);
             }
             if (command == "add-output")
@@ -611,7 +619,7 @@ namespace BTCPayServer.Controllers
                   var extKey = await ExplorerClientProvider.GetExplorerClient(network)
                         .GetMetadataAsync<string>(derivationScheme.AccountDerivation, WellknownMetadataKeys.MasterHDKey, cancellation);
 
-                  return await SignWithSeed(walletId, new SignWithSeedViewModel()
+                  return SignWithSeed(walletId, new SignWithSeedViewModel()
                   {
                       PayJoinEndpointUrl = vm.PayJoinEndpointUrl,
                       SeedOrKey = extKey,
@@ -659,16 +667,29 @@ namespace BTCPayServer.Controllers
                             $"Payment {(string.IsNullOrEmpty(uriBuilder.Label) ? string.Empty : $" to {uriBuilder.Label}")} {(string.IsNullOrEmpty(uriBuilder.Message) ? string.Empty : $" for {uriBuilder.Message}")}"
                     });
                 }
-                uriBuilder.UnknowParameters.TryGetValue("bpu", out var vmPayJoinEndpointUrl);
+                uriBuilder.UnknowParameters.TryGetValue(PayjoinClient.BIP21EndpointKey, out var vmPayJoinEndpointUrl);
                 vm.PayJoinEndpointUrl = vmPayJoinEndpointUrl;
             }
-            catch (Exception)
+            catch
             {
-                TempData.SetStatusMessageModel(new StatusMessageModel()
+                try
                 {
-                    Severity = StatusMessageModel.StatusSeverity.Error,
-                    Message = "The provided BIP21 payment URI was malformed"
-                });
+                    vm.Outputs = new List<WalletSendModel.TransactionOutput>()
+                    {
+                        new WalletSendModel.TransactionOutput()
+                        {
+                            DestinationAddress = BitcoinAddress.Create(bip21, network.NBitcoinNetwork).ToString()
+                        }
+                    };
+                }
+                catch
+                {
+                    TempData.SetStatusMessageModel(new StatusMessageModel()
+                    {
+                        Severity = StatusMessageModel.StatusSeverity.Error,
+                        Message = "The provided BIP21 payment URI was malformed"
+                    });
+                }
             }
 
             ModelState.Clear();
@@ -688,7 +709,7 @@ namespace BTCPayServer.Controllers
 
         [HttpPost]
         [Route("{walletId}/vault")]
-        public async Task<IActionResult> WalletSendVault([ModelBinder(typeof(WalletIdModelBinder))]
+        public IActionResult WalletSendVault([ModelBinder(typeof(WalletIdModelBinder))]
             WalletId walletId, WalletSendVaultModel model)
         {
             return RedirectToWalletPSBTReady(model.PSBT, originalPsbt: model.OriginalPSBT,  payJoinEndpointUrl: model.PayJoinEndpointUrl);
@@ -764,7 +785,7 @@ namespace BTCPayServer.Controllers
       
         [HttpPost]
         [Route("{walletId}/ledger")]
-        public async Task<IActionResult> SubmitLedger([ModelBinder(typeof(WalletIdModelBinder))]
+        public IActionResult SubmitLedger([ModelBinder(typeof(WalletIdModelBinder))]
             WalletId walletId, WalletSendLedgerModel model)
         {
             return RedirectToWalletPSBTReady(model.PSBT);
@@ -782,7 +803,7 @@ namespace BTCPayServer.Controllers
         }
 
         [HttpPost("{walletId}/psbt/seed")]
-        public async Task<IActionResult> SignWithSeed([ModelBinder(typeof(WalletIdModelBinder))]
+        public IActionResult SignWithSeed([ModelBinder(typeof(WalletIdModelBinder))]
             WalletId walletId, SignWithSeedViewModel viewModel)
         {
             if (!ModelState.IsValid)
@@ -869,17 +890,6 @@ namespace BTCPayServer.Controllers
                 var wallet = _walletProvider.GetWallet(network);
                 var derivationSettings = GetDerivationSchemeSettings(walletId);
                 wallet.InvalidateCache(derivationSettings.AccountDerivation);
-                if (TempData.GetStatusMessageModel() == null)
-                {
-                    TempData[WellKnownTempData.SuccessMessage] =
-                        $"Transaction broadcasted successfully ({transaction.GetHash()})";
-                }
-                else
-                {
-                    var statusMessageModel = TempData.GetStatusMessageModel();
-                    statusMessageModel.Message += $" ({transaction.GetHash()})";
-                    TempData.SetStatusMessageModel(statusMessageModel);
-                }
             }
             return RedirectToAction(nameof(WalletTransactions), new { walletId = walletId.ToString() });
         }

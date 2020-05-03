@@ -5,7 +5,7 @@
         @if (!string.IsNullOrEmpty(Model.CustomLogoLink))
         {
             <div class="header__icon">
-                <img class="header__icon__img" src="@Model.CustomLogoLink" height="40">
+                <img class="header__icon__img" src="@Model.CustomLogoLink" height="40" asp-append-version="true">
             </div>
         }
         else
@@ -61,7 +61,7 @@
                         {
                             <li class="vexmenuitem">
                                 <a href="@crypto.Link" onclick="closePaymentMethodDialog('@crypto.PaymentMethodId');return false;">
-                                    <img alt="@crypto.PaymentMethodName" src="@crypto.CryptoImage" />
+                                    <img alt="@crypto.PaymentMethodName" src="@crypto.CryptoImage" asp-append-version="true" />
                                     @crypto.PaymentMethodName
                                     @(crypto.IsLightning ? Html.Raw("&#9889;") : null)
                                     <span>@crypto.CryptoCode</span>
@@ -197,7 +197,7 @@
                     <div class="status-icon__wrapper">
                         <div class="inner-wrapper">
                             <div class="status-icon__wrapper__icon">
-                                <img src="~/imlegacy/checkmark.svg">
+                                <img src="~/imlegacy/checkmark.svg" asp-append-version="true">
                             </div>
                             <div class="status-icon__wrapper__outline"></div>
                         </div>
@@ -220,8 +220,7 @@
         <div>
             <div class="expired__body" style="margin-bottom: 20px;">
                 <div class="expired__header">{{$t("What happened?")}}</div>
-                <div class="expired__text" i18n="">
-                    {{$t("InvoiceExpired_Body_1", {storeName: srvModel.storeName, maxTimeMinutes: @Model.MaxTimeMinutes})}}
+                <div class="expired__text" v-html="$t('InvoiceExpired_Body_1', {storeName: srvModel.storeName, maxTimeMinutes: @Model.MaxTimeMinutes})">
                 </div>
                 <div class="expired__text">
                     {{$t("InvoiceExpired_Body_2")}}
@@ -238,7 +237,7 @@
                 </div>
             </div>
             <a class="action-button" :href="srvModel.merchantRefLink" v-show="!isModal">
-                <span>{{$t("Return to StoreName", srvModel)}}</span>
+                <span v-html="$t('Return to StoreName', srvModel)"></span>
             </a>
             <button class="action-button close-action" v-show="isModal" v-on:click="close">
                 <span v-html="$t('Close')"></span>

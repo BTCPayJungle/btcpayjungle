@@ -5,9 +5,11 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using BTCPayServer.HostedServices;
 using BTCPayServer.ModelBinders;
 using BTCPayServer.Models;
 using BTCPayServer.Models.WalletViewModels;
+using BTCPayServer.Services;
 using Microsoft.AspNetCore.Mvc;
 using NBitcoin;
 using NBXplorer;
@@ -85,6 +87,9 @@ namespace BTCPayServer.Controllers
                 return await WalletPSBT(walletId, vm);
             var network = NetworkProvider.GetNetwork<BTCPayNetwork>(walletId.CryptoCode);
             vm.CryptoCode = network.CryptoCode;
+            vm.NBXSeedAvailable = await CanUseHotWallet() && !string.IsNullOrEmpty(await ExplorerClientProvider.GetExplorerClient(network)
+                .GetMetadataAsync<string>(GetDerivationSchemeSettings(walletId).AccountDerivation,
+                    WellknownMetadataKeys.Mnemonic));
             var psbt = await vm.GetPSBT(network.NBitcoinNetwork);
             if (psbt == null)
             {
@@ -125,7 +130,7 @@ namespace BTCPayServer.Controllers
                             .GetMetadataAsync<string>(derivationScheme.AccountDerivation,
                                 WellknownMetadataKeys.MasterHDKey);
 
-                        return await SignWithSeed(walletId,
+                        return SignWithSeed(walletId,
                             new SignWithSeedViewModel() {SeedOrKey = extKey, PSBT = psbt.ToBase64(), PayJoinEndpointUrl = vm.PayJoinEndpointUrl});
                     }
 
@@ -144,24 +149,14 @@ namespace BTCPayServer.Controllers
             }
         }
 
-        private async Task<PSBT> TryGetPayjoinProposedTX(string bpu, PSBT psbt, DerivationSchemeSettings derivationSchemeSettings, BTCPayNetwork btcPayNetwork, CancellationToken cancellationToken)
+        private async Task<PSBT> GetPayjoinProposedTX(string bpu, PSBT psbt, DerivationSchemeSettings derivationSchemeSettings, BTCPayNetwork btcPayNetwork, CancellationToken cancellationToken)
         {
-            if (!string.IsNullOrEmpty(bpu) && Uri.TryCreate(bpu, UriKind.Absolute, out var endpoint))
-            {
-                var cloned = psbt.Clone();
-                cloned = cloned.Finalize();
-                await _broadcaster.Schedule(DateTimeOffset.UtcNow + TimeSpan.FromMinutes(1.0), cloned.ExtractTransaction(), btcPayNetwork);
-                try
-                {
-                    return await _payjoinClient.RequestPayjoin(endpoint, derivationSchemeSettings, cloned, cancellationToken);
-                }
-                catch (Exception)
-                {
-                    return null;
-                }
-                
-            }
-            return null;
+            if (string.IsNullOrEmpty(bpu) || !Uri.TryCreate(bpu, UriKind.Absolute, out var endpoint))
+                throw new InvalidOperationException("No payjoin url available");
+            var cloned = psbt.Clone();
+            cloned = cloned.Finalize();
+            await _broadcaster.Schedule(DateTimeOffset.UtcNow + TimeSpan.FromMinutes(2.0), cloned.ExtractTransaction(), btcPayNetwork);
+            return await _payjoinClient.RequestPayjoin(endpoint, derivationSchemeSettings, psbt, cancellationToken);
         }
         
         [HttpGet]
@@ -321,22 +316,11 @@ namespace BTCPayServer.Controllers
             switch (command)
             {
                 case "payjoin":
-                    var proposedPayjoin =await 
-                        TryGetPayjoinProposedTX(vm.PayJoinEndpointUrl, psbt, derivationSchemeSettings, network, cancellationToken);
-                    if (proposedPayjoin == null)
+                    string error = null;
+                    try
                     {
-                        //we possibly exposed the tx to the receiver, so we need to broadcast straight away
-                        TempData.SetStatusMessageModel(new StatusMessageModel()
-                        {
-                            Severity = StatusMessageModel.StatusSeverity.Warning,
-                            AllowDismiss = false,
-                            Html = $"The payjoin transaction could not be created. The original transaction was broadcast instead."
-                        });
-                        return await WalletPSBTReady(walletId, vm, "broadcast");
-                    }
-                    else
-                    {
-                        
+                        var proposedPayjoin = await GetPayjoinProposedTX(vm.PayJoinEndpointUrl, psbt,
+                            derivationSchemeSettings, network, cancellationToken);
                         try
                         {
                             var extKey = ExtKey.Parse(vm.SigningKey, network.NBitcoinNetwork);
@@ -345,20 +329,68 @@ namespace BTCPayServer.Controllers
                                 RootedKeyPath.Parse(vm.SigningKeyPath));
                             vm.PSBT = proposedPayjoin.ToBase64();
                             vm.OriginalPSBT = psbt.ToBase64();
+                            proposedPayjoin.Finalize();
+                            var hash = proposedPayjoin.ExtractTransaction().GetHash();
+                            _EventAggregator.Publish(new UpdateTransactionLabel()
+                            {
+                                WalletId = walletId,
+                                TransactionLabels = new Dictionary<uint256, List<(string color, string label)>>()
+                                {
+                                    {
+                                        hash,
+                                        new List<(string color, string label)>
+                                        {
+                                            UpdateTransactionLabel.PayjoinLabelTemplate()
+                                        }
+                                    }
+                                }
+                            });
+                            TempData.SetStatusMessageModel(new StatusMessageModel()
+                            {
+                                Severity = StatusMessageModel.StatusSeverity.Success,
+                                AllowDismiss = false,
+                                Html = $"The payjoin transaction has been successfully broadcasted ({proposedPayjoin.ExtractTransaction().GetHash()})"
+                            });
                             return await WalletPSBTReady(walletId, vm, "broadcast");
                         }
                         catch (Exception)
                         {
                             TempData.SetStatusMessageModel(new StatusMessageModel()
                             {
-                                Severity = StatusMessageModel.StatusSeverity.Info,
+                                Severity = StatusMessageModel.StatusSeverity.Warning,
                                 AllowDismiss = false,
                                 Html =
-                                    $"This transaction has been coordinated between the receiver and you to create a <a href='https://en.bitcoin.it/wiki/PayJoin' target='_blank'>payjoin transaction</a> by adding inputs from the receiver. The amount being sent may appear higher but is in fact the same"
+                                    $"This transaction has been coordinated between the receiver and you to create a <a href='https://en.bitcoin.it/wiki/PayJoin' target='_blank'>payjoin transaction</a> by adding inputs from the receiver.<br/>" +
+                                    $"The amount being sent may appear higher but is in fact almost same.<br/><br/>" +
+                                    $"If you cancel or refuse to sign this transaction, the payment will proceed without payjoin"
                             });
                             return ViewVault(walletId, proposedPayjoin, vm.PayJoinEndpointUrl, psbt);
                         }
                     }
+                    catch (PayjoinReceiverException ex)
+                    {
+                        error = $"The payjoin receiver could not complete the payjoin: {ex.Message}";
+                    }
+                    catch (PayjoinSenderException ex)
+                    {
+                        error = $"We rejected the receiver's payjoin proposal: {ex.Message}";
+                    }
+                    catch (Exception ex)
+                    {
+                        error = $"Unexpected payjoin error: {ex.Message}";
+                    }
+                    
+                    //we possibly exposed the tx to the receiver, so we need to broadcast straight away
+                    psbt.Finalize();
+                    TempData.SetStatusMessageModel(new StatusMessageModel()
+                    {
+                        Severity = StatusMessageModel.StatusSeverity.Warning,
+                        AllowDismiss = false,
+                        Html = $"The payjoin transaction could not be created.<br/>" +
+                               $"The original transaction was broadcasted instead. ({psbt.ExtractTransaction().GetHash()})<br/><br/>" +
+                               $"{error}"
+                    });
+                    return await WalletPSBTReady(walletId, vm, "broadcast");
                 case "broadcast" when !psbt.IsAllFinalized() && !psbt.TryFinalize(out var errors):
                     vm.SetErrors(errors);
                     return View(nameof(WalletPSBTReady),vm);
@@ -376,7 +408,7 @@ namespace BTCPayServer.Controllers
                                 {
                                     Severity = StatusMessageModel.StatusSeverity.Warning,
                                     AllowDismiss = false,
-                                    Html = $"The payjoin transaction could not be broadcast.<br/>({broadcastResult.RPCCode} {broadcastResult.RPCCodeMessage} {broadcastResult.RPCMessage}).<br/>The transaction has been reverted back to its original format and has been broadcast."
+                                    Html = $"The payjoin transaction could not be broadcasted.<br/>({broadcastResult.RPCCode} {broadcastResult.RPCCodeMessage} {broadcastResult.RPCMessage}).<br/>The transaction has been reverted back to its original format and has been broadcast."
                                 });
                                 vm.PSBT = vm.OriginalPSBT;
                                 vm.OriginalPSBT = null;
@@ -391,6 +423,11 @@ namespace BTCPayServer.Controllers
                     {
                         vm.GlobalError = "Error while broadcasting: " + ex.Message;
                         return View(nameof(WalletPSBTReady),vm);
+                    }
+
+                    if (!TempData.HasStatusMessage())
+                    {
+                        TempData[WellKnownTempData.SuccessMessage] = $"Transaction broadcasted successfully ({transaction.GetHash()})";
                     }
                     return RedirectToWalletTransaction(walletId, transaction);
                 }

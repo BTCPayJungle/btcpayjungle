@@ -1,4 +1,6 @@
 ﻿using BTCPayServer.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using System.Linq;
 using BTCPayServer.HostedServices;
 using BTCPayServer.Hosting;
@@ -16,7 +18,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Routing;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBXplorer;
@@ -92,6 +93,7 @@ namespace BTCPayServer.Tests
         }
 
         public bool MockRates { get; set; } = true;
+        public string SocksEndpoint { get; set; }
 
         public HashSet<string> Chains { get; set; } = new HashSet<string>(){"BTC"};
         public bool UseLightning { get; set; }
@@ -142,6 +144,7 @@ namespace BTCPayServer.Tests
                 config.AppendLine("allow-admin-registration=1");
            
             config.AppendLine($"torrcfile={TestUtils.GetTestDataFullPath("Tor/torrc")}");
+            config.AppendLine($"socksendpoint={SocksEndpoint}");
             config.AppendLine($"debuglog=debug.log");
 
 
@@ -178,6 +181,10 @@ namespace BTCPayServer.Tests
                             .AddFilter("Hangfire", LogLevel.Error)
                             .AddProvider(Logs.LogProvider);
                         });
+                    })
+                    .ConfigureServices(services =>
+                    {
+                        services.TryAddSingleton<IFeeProviderFactory>(new BTCPayServer.Services.Fees.FixedFeeProvider(new FeeRate(100L, 1)));
                     })
                     .UseKestrel()
                     .UseStartup<Startup>()

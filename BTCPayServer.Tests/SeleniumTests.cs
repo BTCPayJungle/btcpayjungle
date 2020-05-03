@@ -14,6 +14,7 @@ using NBitcoin.Payment;
 using BTCPayServer.Controllers;
 using BTCPayServer.Data;
 using BTCPayServer.Services.Wallets;
+using BTCPayServer.Views.Wallets;
 
 namespace BTCPayServer.Tests
 {
@@ -432,7 +433,7 @@ namespace BTCPayServer.Tests
                 var storeId = s.CreateNewStore().storeId;
                 s.GenerateWallet("BTC", "", false, true);
                 var walletId = new WalletId(storeId, "BTC");
-                s.GoToWalletReceive(walletId);
+                s.GoToWallet(walletId, WalletsNavPages.Receive);
                 s.Driver.FindElement(By.Id("generateButton")).Click();
                 var addressStr = s.Driver.FindElement(By.Id("vue-address")).GetProperty("value");
                 var address = BitcoinAddress.Create(addressStr, ((BTCPayNetwork)s.Server.NetworkProvider.GetNetwork("BTC")).NBitcoinNetwork);
@@ -456,7 +457,7 @@ namespace BTCPayServer.Tests
                         coin => coin.OutPoint == spentOutpoint);
                 });
                 await s.Server.ExplorerNode.GenerateAsync(1);
-                s.GoToWalletSend(walletId);
+                s.GoToWallet(walletId, WalletsNavPages.Send);
                 s.Driver.FindElement(By.Id("advancedSettings")).Click();
                 s.Driver.FindElement(By.Id("toggleInputSelection")).Click();
                 s.Driver.WaitForElement(By.Id(spentOutpoint.ToString()));
@@ -540,7 +541,7 @@ namespace BTCPayServer.Tests
                 Assert.NotEqual( receiveAddr, s.Driver.FindElement(By.Id("vue-address")).GetAttribute("value"));
                 
                 
-                var invoiceId = s.CreateInvoice(storeId.storeId);
+                var invoiceId = s.CreateInvoice(storeId.storeName);
                 var invoice = await s.Server.PayTester.InvoiceRepository.GetInvoice(invoiceId);
                 var address = invoice.EntityToDTO().Addresses["BTC"];
                 
@@ -553,7 +554,7 @@ namespace BTCPayServer.Tests
                 
                 //lets import and save private keys
                 var root = mnemonic.DeriveExtKey();
-                 invoiceId = s.CreateInvoice(storeId.storeId);
+                 invoiceId = s.CreateInvoice(storeId.storeName);
                  invoice = await s.Server.PayTester.InvoiceRepository.GetInvoice( invoiceId);
                  address = invoice.EntityToDTO().Addresses["BTC"];
                  result = await s.Server.ExplorerNode.GetAddressInfoAsync(BitcoinAddress.Create(address, Network.RegTest));

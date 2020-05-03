@@ -14,6 +14,7 @@ using Newtonsoft.Json;
 using OpenQA.Selenium;
 using Xunit;
 using Xunit.Abstractions;
+using StoreData = BTCPayServer.Data.StoreData;
 
 namespace BTCPayServer.Tests
 {
@@ -67,7 +68,7 @@ namespace BTCPayServer.Tests
                 var superApiKey = s.AssertHappyMessage().FindElement(By.TagName("code")).Text;
 
                 //this api key has access to everything
-                await TestApiAgainstAccessToken(superApiKey, tester, user, $"{Policies.CanModifyServerSettings};{Policies.CanModifyStoreSettings};{Policies.CanViewProfile}");
+                await TestApiAgainstAccessToken(superApiKey, tester, user, Policies.CanModifyServerSettings,Policies.CanModifyStoreSettings, Policies.CanViewProfile);
 
 
                 s.Driver.FindElement(By.Id("AddApiKey")).Click();
@@ -86,9 +87,9 @@ namespace BTCPayServer.Tests
                     Policies.CanModifyStoreSettings);
 
                 s.Driver.FindElement(By.Id("AddApiKey")).Click();
-                s.Driver.FindElement(By.CssSelector("button[value=change-store-mode]")).Click();
+                s.Driver.FindElement(By.CssSelector("button[value='btcpay.store.canmodifystoresettings:change-store-mode']")).Click();
                 //there should be a store already by default in the dropdown
-                var dropdown = s.Driver.FindElement(By.Name("SpecificStores[0]"));
+                var dropdown = s.Driver.FindElement(By.Name("PermissionValues[2].SpecificStores[0]"));
                 var option = dropdown.FindElement(By.TagName("option"));
                 var storeId = option.GetAttribute("value");
                 option.Click();
@@ -100,7 +101,7 @@ namespace BTCPayServer.Tests
                 s.Driver.FindElement(By.Id("AddApiKey")).Click();
                 s.Driver.FindElement(By.Id("Generate")).Click();
                 var noPermissionsApiKey = s.AssertHappyMessage().FindElement(By.TagName("code")).Text;
-                await TestApiAgainstAccessToken(noPermissionsApiKey, tester, user, string.Empty);
+                await TestApiAgainstAccessToken(noPermissionsApiKey, tester, user);
 
                 await Assert.ThrowsAnyAsync<HttpRequestException>(async () =>
                 {
@@ -133,7 +134,7 @@ namespace BTCPayServer.Tests
                 var apiKeyRepo = s.Server.PayTester.GetService<APIKeyRepository>();
 
                 await TestApiAgainstAccessToken(results.Single(pair => pair.Key == "key").Value, tester, user,
-                    (await apiKeyRepo.GetKey(results.Single(pair => pair.Key == "key").Value)).Permissions);
+                    (await apiKeyRepo.GetKey(results.Single(pair => pair.Key == "key").Value)).GetBlob().Permissions);
 
                 authUrl = BTCPayServerClient.GenerateAuthorizeUri(tester.PayTester.ServerUri,
                     new[] { Policies.CanModifyStoreSettings, Policies.CanModifyServerSettings }, false, true).ToString();
@@ -154,15 +155,15 @@ namespace BTCPayServer.Tests
                     .Select(s1 => new KeyValuePair<string, string>(s1.Split("=")[0], s1.Split("=")[1]));
 
                 await TestApiAgainstAccessToken(results.Single(pair => pair.Key == "key").Value, tester, user,
-                    (await apiKeyRepo.GetKey(results.Single(pair => pair.Key == "key").Value)).Permissions);
+                    (await apiKeyRepo.GetKey(results.Single(pair => pair.Key == "key").Value)).GetBlob().Permissions);
 
             }
         }
 
         async Task TestApiAgainstAccessToken(string accessToken, ServerTester tester, TestAccount testAccount,
-            string expectedPermissionsString)
+            params string[] expectedPermissionsArr)
         {
-            var expectedPermissions = Permission.ToPermissions(expectedPermissionsString).ToArray();
+            var expectedPermissions = Permission.ToPermissions(expectedPermissionsArr).ToArray();
             expectedPermissions ??= new Permission[0];
             var apikeydata = await TestApiAgainstAccessToken<ApiKeyData>(accessToken, $"api/v1/api-keys/current", tester.PayTester.HttpClient);
             var permissions = apikeydata.Permissions;

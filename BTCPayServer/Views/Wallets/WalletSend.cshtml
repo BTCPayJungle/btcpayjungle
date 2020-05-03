@@ -1,4 +1,5 @@
-﻿@using Microsoft.AspNetCore.Mvc.ModelBinding
+﻿@addTagHelper *, BundlerMinifier.TagHelpers
+@using Microsoft.AspNetCore.Mvc.ModelBinding
 @model WalletSendModel
 @{
     Layout = "../Shared/_NavLayout.cshtml";
@@ -13,7 +14,9 @@
         </div>
     </div>
 }
+<partial name="WalletCameraScanner"/>
 <div class="row">
+   
     <div class="@(!Model.InputSelection && Model.Outputs.Count==1? "col-lg-6 transaction-output-form": "col-lg-8")">
         <form method="post">
             <input type="hidden" asp-for="InputSelection" />
@@ -40,14 +43,15 @@
             {
                 <div class="form-group hide-when-js">
                     <label asp-for="SelectedInputs"></label>
-                    <select multiple="multiple" asp-for="SelectedInputs" >
+                    <select multiple="multiple" asp-for="SelectedInputs" class="form-control">
                         @foreach (var input in Model.InputsAvailable)
                         {
-                            <option value="@input.Outpoint" asp-selected="@(Model.SelectedInputs?.Contains(input.Outpoint)??false)">@input.Outpoint (@input.Amount)</option>
+                            <option value="@input.Outpoint" class="text-truncate" asp-selected="@(Model.SelectedInputs?.Contains(input.Outpoint)??false)">(@input.Amount) @input.Outpoint</option>
                         }
                     </select>
                 </div>
                 <partial name="CoinSelection"/>
+                <br>
             }
             
             @if (Model.Outputs.Count == 1)
@@ -68,7 +72,7 @@
                     <span asp-validation-for="Outputs[0].Amount" class="text-danger"></span>
                     <p class="form-text text-muted crypto-info">
                         Your current balance is
-                        <button type="button" class="crypto-balance-link btn btn-link p-0">@Model.CurrentBalance</button> <span>@Model.CryptoCode</span>.
+                        <button type="button" class="crypto-balance-link btn btn-link p-0 align-baseline">@Model.CurrentBalance</button> <span>@Model.CryptoCode</span>.
                     </p>
                 </div>
             }
@@ -98,7 +102,7 @@
                                         </div>
                                         <p class="form-text text-muted crypto-info">
                                             Your current balance is
-                                            <button type="button" class="crypto-balance-link btn btn-link p-0">@Model.CurrentBalance</button> <span>@Model.CryptoCode</span>.
+                                            <button type="button" class="crypto-balance-link btn btn-link p-0 align-baseline">@Model.CurrentBalance</button> <span>@Model.CryptoCode</span>.
                                         </p>
                                         <span asp-validation-for="Outputs[index].Amount" class="text-danger"></span>
                                     </div>
@@ -129,7 +133,7 @@
                 <span id="FeeRate-Error" class="text-danger"></span>
                 <p class="form-text text-muted crypto-info">
                     The recommended value is
-                    <button type="button" id="crypto-fee-link" class="btn btn-link p-0">@Model.RecommendedSatoshiPerByte</button> satoshi per byte.
+                    <button type="button" id="crypto-fee-link" class="btn btn-link p-0 align-baseline">@Model.RecommendedSatoshiPerByte</button> satoshi per byte.
                 </p>
             </div>
             @if (Model.Outputs.Count == 1)
@@ -198,16 +202,17 @@
                         }
                     </div>
                 </div>
-                <button type="submit" name="command" value="add-output" class="ml-1 btn btn-secondary">Add another destination </button>
-                <button type="button" id="bip21parse" class="ml-1 btn btn-secondary">Parse BIP21</button>
+                <button type="submit" name="command" value="add-output" class="ml-1 btn btn-secondary" >Add another destination</button>
+                <button type="button" id="bip21parse" class="ml-1 btn btn-secondary" title="Paste BIP21/Address"><i class="fa fa-paste"></i></button>
+                <button type="button" id="scanqrcode" class="ml-1 btn btn-secondary only-for-js" data-toggle="modal" data-target="#scanModal" title="Scan BIP21/Address with camera"><i class="fa fa-camera"></i></button>
             </div>
         </form>
     </div>
 </div>
 
-@section Scripts
+@section HeadScripts
 {
-    <script src="~/js/WalletSend.js" type="text/javascript" defer="defer"></script>
+    <bundle name="wwwroot/bundles/wallet-send-bundle.min.js" asp-append-version="true"></bundle>
     <style>
         .remove-destination-btn{
             font-size: 1.5rem;

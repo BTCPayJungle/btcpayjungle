@@ -1,8 +1,11 @@
-﻿using System.Net;
+﻿using System.Collections.Concurrent;
+using System.Net;
+using System.Net.Http;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using BTCPayServer.Configuration;
+using NBitcoin;
 using NBitcoin.Protocol.Connectors;
 using NBitcoin.Protocol;
 
@@ -42,7 +45,7 @@ namespace BTCPayServer.Services
             return socket;
         }
 
-        internal static void SafeCloseSocket(System.Net.Sockets.Socket socket)
+        internal static void SafeCloseSocket(Socket socket)
         {
             try
             {

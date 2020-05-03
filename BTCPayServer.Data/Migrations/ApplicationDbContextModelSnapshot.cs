@@ -22,10 +22,10 @@ namespace BTCPayServer.Migrations
                         .HasColumnType("TEXT")
                         .HasMaxLength(50);
 
-                    b.Property<string>("Label")
-                        .HasColumnType("TEXT");
+                    b.Property<byte[]>("Blob")
+                        .HasColumnType("BLOB");
 
-                    b.Property<string>("Permissions")
+                    b.Property<string>("Label")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("StoreId")
@@ -240,6 +240,20 @@ namespace BTCPayServer.Migrations
                     b.ToTable("InvoiceEvents");
                 });
 
+            modelBuilder.Entity("BTCPayServer.Data.OffchainTransactionData", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT")
+                        .HasMaxLength(64);
+
+                    b.Property<byte[]>("Blob")
+                        .HasColumnType("BLOB");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("OffchainTransactions");
+                });
+
             modelBuilder.Entity("BTCPayServer.Data.PairedSINData", b =>
                 {
                     b.Property<string>("Id")
@@ -295,6 +309,17 @@ namespace BTCPayServer.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("PairingCodes");
+                });
+
+            modelBuilder.Entity("BTCPayServer.Data.PayjoinLock", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT")
+                        .HasMaxLength(100);
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PayjoinLocks");
                 });
 
             modelBuilder.Entity("BTCPayServer.Data.PaymentData", b =>
@@ -354,6 +379,23 @@ namespace BTCPayServer.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("PendingInvoices");
+                });
+
+            modelBuilder.Entity("BTCPayServer.Data.PlannedTransaction", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT")
+                        .HasMaxLength(100);
+
+                    b.Property<byte[]>("Blob")
+                        .HasColumnType("BLOB");
+
+                    b.Property<DateTimeOffset>("BroadcastAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PlannedTransactions");
                 });
 
             modelBuilder.Entity("BTCPayServer.Data.RefundAddressesData", b =>

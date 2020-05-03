@@ -111,12 +111,13 @@ namespace BTCPayServer.Tests
                 IList<ValidationError> errors;
                 bool valid = swagger.IsValid(schema, out errors);
                 //the schema is not fully compliant to the spec. We ARE allowed to have multiple security schemas. 
-                if (!valid && errors.Count == 1 && errors.Any(error =>
-                    error.Path == "components.securitySchemes.Basic" && error.ErrorType == ErrorType.OneOf))
+                var matchedError = errors.Where(error =>
+                    error.Path == "components.securitySchemes.Basic" && error.ErrorType == ErrorType.OneOf).ToList();
+                foreach (ValidationError validationError in matchedError)
                 {
-                    errors = new List<ValidationError>();
-                    valid = true;
+                    errors.Remove(validationError);
                 }
+                valid = !errors.Any();
 
                 Assert.Empty(errors);
                 Assert.True(valid);
@@ -158,9 +159,11 @@ namespace BTCPayServer.Tests
                 Assert.Equal(HttpStatusCode.OK, (await httpClient.SendAsync(request)).StatusCode);
                 Logs.Tester.LogInformation($"OK: {url} ({file})");
             }
-            catch (EqualException ex)
+            catch (Exception ex)
             {
-                Logs.Tester.LogInformation($"FAILED: {url} ({file}) {ex.Actual}");
+                var details = ex is EqualException ? (ex as EqualException).Actual : ex.Message;
+                Logs.Tester.LogInformation($"FAILED: {url} ({file}) {details}");
+                
                 throw;
             }
         }
@@ -469,6 +472,28 @@ namespace BTCPayServer.Tests
                 var response = await tester.PayTester.HttpClient.GetAsync("");
                 Assert.True(response.IsSuccessStatusCode);
             }
+        }
+
+        [Fact]
+        [Trait("Fast", "Fast")]
+        public void DeterministicUTXOSorter()
+        {
+            UTXO CreateRandomUTXO()
+            {
+                return new UTXO() { Outpoint = new OutPoint(RandomUtils.GetUInt256(), RandomUtils.GetUInt32() % 0xff) };
+            }
+            var comparer = Payments.PayJoin.PayJoinEndpointController.UTXODeterministicComparer.Instance;
+            var utxos = Enumerable.Range(0, 100).Select(_ => CreateRandomUTXO()).ToArray();
+            Array.Sort(utxos, comparer);
+            var utxo53 = utxos[53];
+            Array.Sort(utxos, comparer);
+            Assert.Equal(utxo53, utxos[53]);
+            var utxo54 = utxos[54];
+            var utxo52 = utxos[52];
+            utxos = utxos.Where((_, i) => i != 53).ToArray();
+            Array.Sort(utxos, comparer);
+            Assert.Equal(utxo52, utxos[52]);
+            Assert.Equal(utxo54, utxos[53]);
         }
 
         [Fact]
@@ -866,6 +891,60 @@ namespace BTCPayServer.Tests
             }
         }
 
+
+        [Fact(Timeout = TestTimeout)]
+        [Trait("Integration", "Integration")]
+        public async Task CanUseTorClient()
+        {
+            using (var tester = ServerTester.Create())
+            {
+                await tester.StartAsync();
+                var proxy = tester.PayTester.GetService<Socks5HttpProxyServer>();
+                void AssertConnectionDropped()
+                {
+                    TestUtils.Eventually(() =>
+                    {
+                        Thread.MemoryBarrier();
+                        Assert.Equal(0, proxy.ConnectionCount);
+                    });
+                }
+                var httpFactory = tester.PayTester.GetService<IHttpClientFactory>();
+                var client = httpFactory.CreateClient(PayjoinClient.PayjoinOnionNamedClient);
+                Assert.NotNull(client);
+                var response = await client.GetAsync("https://check.torproject.org/");
+                response.EnsureSuccessStatusCode();
+                var result = await response.Content.ReadAsStringAsync();
+                Assert.DoesNotContain("You are not using Tor.", result);
+                Assert.Contains("Congratulations. This browser is configured to use Tor.", result);
+                AssertConnectionDropped();
+                response = await client.GetAsync("http://explorerzydxu5ecjrkwceayqybizmpjjznk5izmitf2modhcusuqlid.onion/");
+                response.EnsureSuccessStatusCode();
+                result = await response.Content.ReadAsStringAsync();
+                Assert.Contains("Bitcoin", result);
+
+                AssertConnectionDropped();
+                response = await client.GetAsync("http://explorerzydxu5ecjrkwceayqybizmpjjznk5izmitf2modhcusuqlid.onion/");
+                response.EnsureSuccessStatusCode();
+                AssertConnectionDropped();
+                client.Dispose();
+                AssertConnectionDropped();
+                client = httpFactory.CreateClient(PayjoinClient.PayjoinOnionNamedClient);
+                response = await client.GetAsync("http://explorerzydxu5ecjrkwceayqybizmpjjznk5izmitf2modhcusuqlid.onion/");
+                response.EnsureSuccessStatusCode();
+                AssertConnectionDropped();
+
+                Logs.Tester.LogInformation("Querying an onion address which can't be found should send http 500");
+                response = await client.GetAsync("http://dwoduwoi.onion/");
+                Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+                AssertConnectionDropped();
+
+                Logs.Tester.LogInformation("Querying valid onion but unreachable should send error 502");
+                response = await client.GetAsync("http://fastrcl5totos3vekjbqcmgpnias5qytxnaj7gpxtxhubdcnfrkapqad.onion/");
+                Assert.Equal(HttpStatusCode.BadGateway, response.StatusCode);
+                AssertConnectionDropped();
+            }
+        }
+
         [Fact(Timeout = TestTimeout)]
         [Trait("Integration", "Integration")]
         public async Task CanRescanWallet()
@@ -875,7 +954,7 @@ namespace BTCPayServer.Tests
                 await tester.StartAsync();
                 var acc = tester.NewAccount();
                 acc.GrantAccess();
-                acc.RegisterDerivationScheme("BTC", true);
+                acc.RegisterDerivationScheme("BTC", ScriptPubKeyType.Segwit);
                 var btcDerivationScheme = acc.DerivationScheme;
 
                 var walletController = acc.GetController<WalletsController>();

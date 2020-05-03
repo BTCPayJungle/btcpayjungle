@@ -15,13 +15,13 @@
     <META NAME="robots" CONTENT="noindex,nofollow">
     <title>@Model.HtmlTitle</title>
 
-    <bundle name="wwwroot/bundles/checkout-bundle.min.css" />
+    <bundle name="wwwroot/bundles/checkout-bundle.min.css" asp-append-version="true" />
 
     <script type="text/javascript">
         var initialSrvModel = @Safe.Json(Model);
     </script>
 
-    <bundle name="wwwroot/bundles/checkout-bundle.min.js" />
+    <bundle name="wwwroot/bundles/checkout-bundle.min.js" asp-append-version="true" />
     <script>vex.defaultOptions.className = 'vex-theme-btcpay'</script>
 
     @if (!string.IsNullOrEmpty(Model.CustomCSSLink))
@@ -106,8 +106,8 @@
                             }
                         </script>
                     </div>
-                    <div style="margin-top: 10px; text-align: center;" class="form-text small text-muted">
-                        <span>Powered by <a target="_blank" href="https://btcpayjungle.com">BTCPay Jungle</a></span>
+                    <div class="powered__by__btcpayserver">
+                        Powered by <a target="_blank" href="https://github.com/Eskyee/btcpayjungle">BTCPay Jungle</a>
                     </div>
                 </div>
             </div>
@@ -226,7 +226,7 @@
             closePaymentMethodDialog: function(currencyId) {
                 vex.closeAll();
                 this.changeCurrency(currencyId);
-            },   
+            },
             changeCurrency: function (currency) {
                 if (currency !== null && this.srvModel.paymentMethodId !== currency) {
                     this.changingCurrencies = true;
@@ -234,7 +234,7 @@
                     this.fetchData();
                     this.closePaymentMethodDialog(null);
                 }
-            },     
+            },
             close: function(){
                 $("invoice").fadeOut(300, function () {
                     window.parent.postMessage("close", "*");
@@ -297,7 +297,7 @@
                         }
                         watcher();
                     }, 2000);
-                }            
+                }
                 watcher();
             },
             fetchData: function(){

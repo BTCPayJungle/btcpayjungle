@@ -37,6 +37,11 @@ namespace BTCPayServer.Client
         {
             return policy.StartsWith("btcpay.store", StringComparison.OrdinalIgnoreCase);
         }
+        
+        public static bool IsServerPolicy(string policy)
+        {
+            return policy.StartsWith("btcpay.server", StringComparison.OrdinalIgnoreCase);
+        }
     }
     public class Permission
     {
@@ -121,14 +126,6 @@ namespace BTCPayServer.Client
             {
                 if (TryParse(p, out var pp))
                     yield return pp;
-            }
-        }
-        public static IEnumerable<Permission> ToPermissions(string permissionsFormatted)
-        {
-            foreach(var part in permissionsFormatted.Split(';', StringSplitOptions.RemoveEmptyEntries))
-            {
-                if (Permission.TryParse(part, out var p))
-                    yield return p;
             }
         }
 
