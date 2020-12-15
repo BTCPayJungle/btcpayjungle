@@ -1,11 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using NBitcoin;
-using NBitcoin.DataEncoders;
-using NBXplorer;
 using NBXplorer.DerivationStrategy;
 
 namespace BTCPayServer
@@ -18,8 +14,6 @@ namespace BTCPayServer
 
         public Script HintScriptPubKey { get; set; }
 
-        Dictionary<uint, string[]> ElectrumMapping = new Dictionary<uint, string[]>();
-        
         public DerivationSchemeParser(BTCPayNetwork expectedNetwork)
         {
             if (expectedNetwork == null)
@@ -30,7 +24,7 @@ namespace BTCPayServer
 
         public DerivationStrategyBase ParseElectrum(string str)
         {
-            
+
             if (str == null)
                 throw new ArgumentNullException(nameof(str));
             str = str.Trim();
@@ -42,7 +36,7 @@ namespace BTCPayServer
             var standardPrefix = Utils.ToBytes(0x0488b21eU, false);
             for (int ii = 0; ii < 4; ii++)
                 data[ii] = standardPrefix[ii];
-            var extPubKey = new BitcoinExtPubKey(Network.GetBase58CheckEncoder().EncodeData(data), Network.Main).ToNetwork(Network);
+            var extPubKey = GetBitcoinExtPubKeyByNetwork(Network, data);
             if (!BtcPayNetwork.ElectrumMapping.TryGetValue(prefix, out var type))
             {
                 throw new FormatException();
@@ -119,7 +113,8 @@ namespace BTCPayServer
                     var standardPrefix = Utils.ToBytes(0x0488b21eU, false);
                     for (int ii = 0; ii < 4; ii++)
                         data[ii] = standardPrefix[ii];
-                    var derivationScheme = new BitcoinExtPubKey(Network.GetBase58CheckEncoder().EncodeData(data), Network.Main).ToNetwork(Network).ToString();
+
+                    var derivationScheme = GetBitcoinExtPubKeyByNetwork(Network, data).ToString();
 
                     if (BtcPayNetwork.ElectrumMapping.TryGetValue(prefix, out var type))
                     {
@@ -154,6 +149,18 @@ namespace BTCPayServer
             }
 
             return FindMatch(hintedLabels, BtcPayNetwork.NBXplorerNetwork.DerivationStrategyFactory.Parse(str));
+        }
+
+        public static BitcoinExtPubKey GetBitcoinExtPubKeyByNetwork(Network network, byte[] data)
+        {
+            try
+            {
+                return new BitcoinExtPubKey(network.GetBase58CheckEncoder().EncodeData(data), network.NetworkSet.Mainnet).ToNetwork(network);
+            }
+            catch (Exception)
+            {
+                return new BitcoinExtPubKey(network.GetBase58CheckEncoder().EncodeData(data), Network.Main).ToNetwork(network);
+            }
         }
 
         private DerivationStrategyBase FindMatch(HashSet<string> hintLabels, DerivationStrategyBase result)

@@ -1,20 +1,24 @@
-﻿using BTCPayServer.Services.Mails;
-using Microsoft.AspNetCore.Mvc.Rendering;
-using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Threading.Tasks;
+using BTCPayServer.Services.Mails;
 
 namespace BTCPayServer.Models.ServerViewModels
 {
     public class EmailsViewModel
     {
+        public EmailsViewModel()
+        {
+
+        }
+        public EmailsViewModel(EmailSettings settings)
+        {
+            Settings = settings;
+            PasswordSet = !string.IsNullOrEmpty(settings?.Password);
+        }
         public EmailSettings Settings
         {
             get; set;
         }
-
+        public bool PasswordSet { get; set; }
         [EmailAddress]
         [Display(Name = "Test Email")]
         public string TestEmail

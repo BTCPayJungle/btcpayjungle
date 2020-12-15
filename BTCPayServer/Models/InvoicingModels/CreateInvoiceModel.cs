@@ -1,11 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Threading.Tasks;
-using BTCPayServer.Validation;
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+using BTCPayServer.Validation;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace BTCPayServer.Models.InvoicingModels
 {
@@ -15,7 +13,7 @@ namespace BTCPayServer.Models.InvoicingModels
         {
             Currency = "USD";
         }
-        
+
         [Required]
         public decimal? Amount
         {

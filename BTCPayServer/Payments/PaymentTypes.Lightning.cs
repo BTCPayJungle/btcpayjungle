@@ -1,9 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using System;
 using BTCPayServer.Payments.Lightning;
 using BTCPayServer.Services.Invoices;
+using NBitcoin;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
@@ -12,26 +10,27 @@ namespace BTCPayServer.Payments
     public class LightningPaymentType : PaymentType
     {
         public static LightningPaymentType Instance { get; } = new LightningPaymentType();
-        private LightningPaymentType()
-        {
 
-        }
+        private LightningPaymentType() { }
 
         public override string ToPrettyString() => "Off-Chain";
         public override string GetId() => "LightningLike";
+        public override string GetBadge() => "⚡";
+        public override string ToStringNormalized() => "LightningNetwork";
+
         public override CryptoPaymentData DeserializePaymentData(BTCPayNetworkBase network, string str)
         {
-            return ((BTCPayNetwork) network).ToObject<LightningLikePaymentData>(str);
+            return ((BTCPayNetwork)network)?.ToObject<LightningLikePaymentData>(str);
         }
 
         public override string SerializePaymentData(BTCPayNetworkBase network, CryptoPaymentData paymentData)
         {
-            return ((BTCPayNetwork) network).ToString(paymentData);
+            return ((BTCPayNetwork)network).ToString(paymentData);
         }
 
         public override IPaymentMethodDetails DeserializePaymentMethodDetails(BTCPayNetworkBase network, string str)
         {
-            return JsonConvert.DeserializeObject<Payments.Lightning.LightningLikePaymentMethodDetails>(str);
+            return JsonConvert.DeserializeObject<LightningLikePaymentMethodDetails>(str);
         }
 
         public override string SerializePaymentMethodDetails(BTCPayNetworkBase network, IPaymentMethodDetails details)
@@ -39,7 +38,8 @@ namespace BTCPayServer.Payments
             return JsonConvert.SerializeObject(details);
         }
 
-        public override ISupportedPaymentMethod DeserializeSupportedPaymentMethod(BTCPayNetworkBase network, JToken value)
+        public override ISupportedPaymentMethod DeserializeSupportedPaymentMethod(BTCPayNetworkBase network,
+            JToken value)
         {
             return JsonConvert.DeserializeObject<LightningSupportedPaymentMethod>(value.ToString());
         }
@@ -48,6 +48,16 @@ namespace BTCPayServer.Payments
         {
             return null;
         }
-        public override string InvoiceViewPaymentPartialName { get; } = "ViewLightningLikePaymentData";
+
+        public override string GetPaymentLink(BTCPayNetworkBase network, IPaymentMethodDetails paymentMethodDetails,
+            Money cryptoInfoDue, string serverUri)
+        {
+            var lnInvoiceTrimmedOfScheme = paymentMethodDetails.GetPaymentDestination().ToLowerInvariant()
+                .Replace("lightning:", "", StringComparison.InvariantCultureIgnoreCase);
+
+            return $"lightning:{lnInvoiceTrimmedOfScheme}";
+        }
+
+        public override string InvoiceViewPaymentPartialName { get; } = "Lightning/ViewLightningLikePaymentData";
     }
 }

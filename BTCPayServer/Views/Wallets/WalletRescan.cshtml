@@ -5,35 +5,34 @@
     ViewData.SetActivePageAndTitle(WalletsNavPages.Rescan);
 }
 
-
 @if (!Model.Ok)
 {
     <div class="row">
-        <div class="col-md-10">
+        <div class="col-lg-8">
             <p>This feature is disabled</p>
             @if (Model.IsFullySync)
             {
-                <p><span class="fa fa-check-circle" style="color:green;"></span> <span>The full node is synched</span></p>
+                <p><span class="text-success fa fa-check-circle"></span> <span>The full node is synched</span></p>
             }
             else
             {
-                <p><span class="fa fa-times-circle" style="color:red;"></span> <span>The full node is not synched</span></p>
+                <p><span class="text-danger fa fa-times-circle"></span> <span>The full node is not synched</span></p>
             }
             @if (Model.IsServerAdmin)
             {
-                <p><span class="fa fa-check-circle" style="color:green;"></span> <span>You are server administrator</span></p>
+                <p><span class="text-success fa fa-check-circle"></span> <span>You are server administrator</span></p>
             }
             else
             {
-                <p><span class="fa fa-times-circle" style="color:red;"></span> <span>You are not server administrator</span></p>
+                <p><span class="text-danger fa fa-times-circle"></span> <span>You are not server administrator</span></p>
             }
             @if (Model.IsSupportedByCurrency)
             {
-                <p><span class="fa fa-check-circle" style="color:green;"></span> <span>This full node support rescan of the UTXO set</span></p>
+                <p><span class="text-success fa fa-check-circle"></span> <span>This full node support rescan of the UTXO set</span></p>
             }
             else
             {
-                <p><span class="fa fa-times-circle" style="color:red;"></span> <span>This full node do not support rescan of the UTXO set</span></p>
+                <p><span class="text-danger fa fa-times-circle"></span> <span>This full node does not support rescan of the UTXO set</span></p>
             }
         </div>
     </div>
@@ -55,7 +54,7 @@ else if (!Model.Progress.HasValue)
                 <span>The previous scan completed and found <b>@Model.LastSuccess.Found</b> UTXOs in <b>@Model.TimeOfScan</b> (The total UTXO set size is @Model.LastSuccess.TotalSizeOfUTXOSet.Value)</span>
             </div>
         }
-        <div class="col-md-8">
+        <div class="col-lg-8">
             <p>
                 Scanning the UTXO set allow you to restore the balance of your wallet, but not all the transaction history.
             </p>
@@ -68,19 +67,19 @@ else if (!Model.Progress.HasValue)
     </div>
 
     <div class="row">
-        <div class="col-md-8">
+        <div class="col-lg-8">
             <form method="post">
                 <div class="form-group">
                     <label asp-for="StartingIndex"></label>
-                    <input asp-for="StartingIndex" class="form-control" type="number" />
+                    <input asp-for="StartingIndex" class="form-control" type="number" style="max-width:14ch;" />
                 </div>
                 <div class="form-group">
                     <label asp-for="GapLimit"></label>
-                    <input asp-for="GapLimit" class="form-control" type="number" />
+                    <input asp-for="GapLimit" class="form-control" type="number" step="1000" style="max-width:14ch;" />
                 </div>
                 <div class="form-group">
                     <label asp-for="BatchSize"></label>
-                    <input asp-for="BatchSize" class="form-control" type="number" />
+                    <input asp-for="BatchSize" class="form-control" type="number" step="1000" style="max-width:14ch;" />
                 </div>
                 <button type="submit" class="btn btn-primary">Start scan</button>
             </form>
@@ -90,7 +89,7 @@ else if (!Model.Progress.HasValue)
 else
 {
     <div class="row">
-        <div class="col-md-10">
+        <div class="col-lg-8">
             <p>Scanning in progress, refresh the page to see the progress... (Estimated time: @Model.RemainingTime)</p>
             <div class="progress">
                 <div class="progress-bar" role="progressbar" aria-valuenow="@(Model.Progress.Value)"

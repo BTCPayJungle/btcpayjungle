@@ -1,11 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using BTCPayServer.Data;
 using Microsoft.EntityFrameworkCore;
 using NBitcoin;
-using NBXplorer.Models;
 
 namespace BTCPayServer.Payments.PayJoin
 {
@@ -42,7 +38,7 @@ namespace BTCPayServer.Payments.PayJoin
                 ctx.PayjoinLocks.Remove(new PayjoinLock()
                 {
                     Id = outPoint.ToString()
-                });   
+                });
             }
             try
             {
@@ -64,7 +60,7 @@ namespace BTCPayServer.Payments.PayJoin
                     // Random flag so it does not lock same id
                     // as the lock utxo
                     Id = "K-" + outPoint.ToString()
-                });   
+                });
             }
             try
             {

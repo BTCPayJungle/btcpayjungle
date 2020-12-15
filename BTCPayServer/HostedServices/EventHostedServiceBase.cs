@@ -1,27 +1,28 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using Microsoft.Extensions.Logging;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using BTCPayServer.Logging;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace BTCPayServer.HostedServices
 {
     public class EventHostedServiceBase : IHostedService
     {
         private readonly EventAggregator _EventAggregator;
+        public EventAggregator EventAggregator => _EventAggregator;
 
         private List<IEventAggregatorSubscription> _Subscriptions;
         private CancellationTokenSource _Cts;
-
+        public CancellationToken CancellationToken => _Cts.Token;
         public EventHostedServiceBase(EventAggregator eventAggregator)
         {
             _EventAggregator = eventAggregator;
         }
 
-        Channel<object> _Events = Channel.CreateUnbounded<object>();
+        readonly Channel<object> _Events = Channel.CreateUnbounded<object>();
         public async Task ProcessEvents(CancellationToken cancellationToken)
         {
             while (await _Events.Reader.WaitToReadAsync(cancellationToken))
@@ -58,6 +59,11 @@ namespace BTCPayServer.HostedServices
         protected void Subscribe<T>()
         {
             _Subscriptions.Add(_EventAggregator.Subscribe<T>(e => _Events.Writer.TryWrite(e)));
+        }
+
+        protected void PushEvent(object obj)
+        {
+            _Events.Writer.TryWrite(obj);
         }
 
         public virtual Task StartAsync(CancellationToken cancellationToken)

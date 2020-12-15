@@ -1,22 +1,19 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using System.Linq;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using System;
-using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using NBitcoin.DataEncoders;
-using Microsoft.AspNetCore.Http;
-using System.IO;
 using BTCPayServer.Security.Bitpay;
+using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace BTCPayServer.Models
 {
     //{"data":[{"pos":"FfZ6WCa8TunAvPCpQZXkdBsoH4Yo18FyPaJ5X5qjrVVY"},{"pos/invoice":"H1pwwh2tMeSCri9rh5VvHWEHokGdf2EGtghfZkUEbeZv"},{"merchant":"89zEBr9orAc6wgybAABp8ioGcjYeFrUaZgMzjxNuqYty"},{"merchant/invoice":"8e7ijDxGfJsWXWgJuKXjjNgxnX1xpsBM8cTZCFnU7ehj"}]}
     public class GetTokensResponse : IActionResult
     {
-        BitTokenEntity[] _Tokens;
+        readonly BitTokenEntity[] _Tokens;
         public GetTokensResponse(BitTokenEntity[] tokens)
         {
             if (tokens == null)

@@ -1,10 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Http;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using BTCPayServer.Abstractions.Extensions;
+using BTCPayServer.Abstractions.Models;
 using BTCPayServer.HostedServices;
 using BTCPayServer.ModelBinders;
 using BTCPayServer.Models;
@@ -12,6 +12,7 @@ using BTCPayServer.Models.WalletViewModels;
 using BTCPayServer.Services;
 using Microsoft.AspNetCore.Mvc;
 using NBitcoin;
+using NBitcoin.Payment;
 using NBXplorer;
 using NBXplorer.Models;
 
@@ -27,7 +28,7 @@ namespace BTCPayServer.Controllers
             CreatePSBTRequest psbtRequest = new CreatePSBTRequest();
             if (sendModel.InputSelection)
             {
-                psbtRequest.IncludeOnlyOutpoints = sendModel.SelectedInputs?.Select(OutPoint.Parse)?.ToList()?? new List<OutPoint>();
+                psbtRequest.IncludeOnlyOutpoints = sendModel.SelectedInputs?.Select(OutPoint.Parse)?.ToList() ?? new List<OutPoint>();
             }
             foreach (var transactionOutput in sendModel.Outputs)
             {
@@ -37,19 +38,28 @@ namespace BTCPayServer.Controllers
                 psbtDestination.Amount = Money.Coins(transactionOutput.Amount.Value);
                 psbtDestination.SubstractFees = transactionOutput.SubtractFeesFromOutput;
             }
-           
+
             if (network.SupportRBF)
             {
-                psbtRequest.RBF = !sendModel.DisableRBF;
+                if (sendModel.AllowFeeBump is WalletSendModel.ThreeStateBool.Yes)
+                    psbtRequest.RBF = true;
+                if (sendModel.AllowFeeBump is WalletSendModel.ThreeStateBool.No)
+                    psbtRequest.RBF = false;
             }
-           
+
+            psbtRequest.AlwaysIncludeNonWitnessUTXO = sendModel.AlwaysIncludeNonWitnessUTXO;
+
             psbtRequest.FeePreference = new FeePreference();
-            psbtRequest.FeePreference.ExplicitFeeRate = new FeeRate(Money.Satoshis(sendModel.FeeSatoshiPerByte), 1);
+            if (sendModel.FeeSatoshiPerByte is decimal v &&
+                v > decimal.Zero)
+            {
+                psbtRequest.FeePreference.ExplicitFeeRate = new FeeRate(v);
+            }
             if (sendModel.NoChange)
             {
                 psbtRequest.ExplicitChangeAddress = psbtRequest.Destinations.First().Destination;
             }
-           
+
             var psbt = (await nbx.CreatePSBTAsync(derivationSettings.AccountDerivation, psbtRequest, cancellationToken));
             if (psbt == null)
                 throw new NotSupportedException("You need to update your version of NBXplorer");
@@ -72,8 +82,9 @@ namespace BTCPayServer.Controllers
             {
                 vm.Decoded = psbt.ToString();
                 vm.PSBT = psbt.ToBase64();
+                vm.PSBTHex = psbt.ToHex();
             }
-            
+
             return View(nameof(WalletPSBT), vm ?? new WalletPSBTViewModel() { CryptoCode = walletId.CryptoCode });
         }
         [HttpPost]
@@ -96,6 +107,13 @@ namespace BTCPayServer.Controllers
                 ModelState.AddModelError(nameof(vm.PSBT), "Invalid PSBT");
                 return View(vm);
             }
+
+            vm.PSBTHex = psbt.ToHex();
+            var res = await TryHandleSigningCommands(walletId, psbt, command, new SigningContextModel(psbt));
+            if (res != null)
+            {
+                return res;
+            }
             switch (command)
             {
                 case "decode":
@@ -104,12 +122,10 @@ namespace BTCPayServer.Controllers
                     ModelState.Remove(nameof(vm.FileName));
                     ModelState.Remove(nameof(vm.UploadedPSBTFile));
                     vm.PSBT = psbt.ToBase64();
+                    vm.PSBTHex = psbt.ToHex();
                     vm.FileName = vm.UploadedPSBTFile?.FileName;
                     return View(vm);
-                case "vault":
-                    return ViewVault(walletId, psbt, vm.PayJoinEndpointUrl);
-                case "ledger":
-                    return ViewWalletSendLedger(walletId, psbt);
+
                 case "update":
                     var derivationSchemeSettings = GetDerivationSchemeSettings(walletId);
                     psbt = await ExplorerClientProvider.UpdatePSBT(derivationSchemeSettings, psbt);
@@ -119,26 +135,19 @@ namespace BTCPayServer.Controllers
                         return View(vm);
                     }
                     TempData[WellKnownTempData.SuccessMessage] = "PSBT updated!";
-                    return RedirectToWalletPSBT(psbt, vm.FileName);
-                case "seed":
-                    return SignWithSeed(walletId, psbt.ToBase64(), vm.PayJoinEndpointUrl);
-                case "nbx-seed":
-                    if (await CanUseHotWallet())
+                    return RedirectToWalletPSBT(new WalletPSBTViewModel()
                     {
-                        var derivationScheme = GetDerivationSchemeSettings(walletId);
-                        var extKey = await ExplorerClientProvider.GetExplorerClient(network)
-                            .GetMetadataAsync<string>(derivationScheme.AccountDerivation,
-                                WellknownMetadataKeys.MasterHDKey);
+                        PSBT = psbt.ToBase64(),
+                        FileName = vm.FileName
+                    });
 
-                        return SignWithSeed(walletId,
-                            new SignWithSeedViewModel() {SeedOrKey = extKey, PSBT = psbt.ToBase64(), PayJoinEndpointUrl = vm.PayJoinEndpointUrl});
-                    }
-
-                    return View(vm);
                 case "broadcast":
-                {
-                    return RedirectToWalletPSBTReady(psbt.ToBase64());
-                }
+                    {
+                        return RedirectToWalletPSBTReady(new WalletPSBTReadyViewModel()
+                        {
+                            SigningContext = new SigningContextModel(psbt)
+                        });
+                    }
                 case "combine":
                     ModelState.Remove(nameof(vm.PSBT));
                     return View(nameof(WalletPSBTCombine), new WalletPSBTCombineViewModel() { OtherPSBT = psbt.ToBase64() });
@@ -149,32 +158,24 @@ namespace BTCPayServer.Controllers
             }
         }
 
-        private async Task<PSBT> GetPayjoinProposedTX(string bpu, PSBT psbt, DerivationSchemeSettings derivationSchemeSettings, BTCPayNetwork btcPayNetwork, CancellationToken cancellationToken)
+        private async Task<PSBT> GetPayjoinProposedTX(BitcoinUrlBuilder bip21, PSBT psbt, DerivationSchemeSettings derivationSchemeSettings, BTCPayNetwork btcPayNetwork, CancellationToken cancellationToken)
         {
-            if (string.IsNullOrEmpty(bpu) || !Uri.TryCreate(bpu, UriKind.Absolute, out var endpoint))
-                throw new InvalidOperationException("No payjoin url available");
             var cloned = psbt.Clone();
             cloned = cloned.Finalize();
             await _broadcaster.Schedule(DateTimeOffset.UtcNow + TimeSpan.FromMinutes(2.0), cloned.ExtractTransaction(), btcPayNetwork);
-            return await _payjoinClient.RequestPayjoin(endpoint, derivationSchemeSettings, psbt, cancellationToken);
+            return await _payjoinClient.RequestPayjoin(bip21, derivationSchemeSettings, psbt, cancellationToken);
         }
-        
+
         [HttpGet]
         [Route("{walletId}/psbt/ready")]
         public async Task<IActionResult> WalletPSBTReady(
             [ModelBinder(typeof(WalletIdModelBinder))]
-            WalletId walletId, string psbt = null, 
-            string signingKey = null,
-            string signingKeyPath = null,
-            string originalPsbt = null,
-            string payJoinEndpointUrl = null)
+            WalletId walletId,
+            WalletPSBTReadyViewModel vm)
         {
+            if (vm is null)
+                return NotFound();
             var network = NetworkProvider.GetNetwork<BTCPayNetwork>(walletId.CryptoCode);
-            var vm = new WalletPSBTReadyViewModel() { PSBT = psbt };
-            vm.SigningKey = signingKey;
-            vm.SigningKeyPath = signingKeyPath;
-            vm.OriginalPSBT = originalPsbt;
-            vm.PayJoinEndpointUrl = payJoinEndpointUrl;
             var derivationSchemeSettings = GetDerivationSchemeSettings(walletId);
             if (derivationSchemeSettings == null)
                 return NotFound();
@@ -188,7 +189,7 @@ namespace BTCPayServer.Controllers
 
         private async Task FetchTransactionDetails(DerivationSchemeSettings derivationSchemeSettings, WalletPSBTReadyViewModel vm, BTCPayNetwork network)
         {
-            var psbtObject = PSBT.Parse(vm.PSBT, network.NBitcoinNetwork);
+            var psbtObject = PSBT.Parse(vm.SigningContext.PSBT, network.NBitcoinNetwork);
             if (!psbtObject.IsAllFinalized())
                 psbtObject = await ExplorerClientProvider.UpdatePSBT(derivationSchemeSettings, psbtObject) ?? psbtObject;
             IHDKey signingKey = null;
@@ -268,7 +269,7 @@ namespace BTCPayServer.Controllers
                 vm.Destinations.Add(new WalletPSBTReadyViewModel.DestinationViewModel()
                 {
                     Positive = false,
-                    Balance = ValueToString(- fee, network),
+                    Balance = ValueToString(-fee, network),
                     Destination = "Mining fees"
                 });
             }
@@ -295,13 +296,13 @@ namespace BTCPayServer.Controllers
             WalletId walletId, WalletPSBTReadyViewModel vm, string command = null, CancellationToken cancellationToken = default)
         {
             if (command == null)
-                return await WalletPSBTReady(walletId, vm.PSBT, vm.SigningKey, vm.SigningKeyPath, vm.OriginalPSBT, vm.PayJoinEndpointUrl);
+                return await WalletPSBTReady(walletId, vm);
             PSBT psbt = null;
             var network = NetworkProvider.GetNetwork<BTCPayNetwork>(walletId.CryptoCode);
             DerivationSchemeSettings derivationSchemeSettings = null;
             try
             {
-                psbt = PSBT.Parse(vm.PSBT, network.NBitcoinNetwork);
+                psbt = PSBT.Parse(vm.SigningContext.PSBT, network.NBitcoinNetwork);
                 derivationSchemeSettings = GetDerivationSchemeSettings(walletId);
                 if (derivationSchemeSettings == null)
                     return NotFound();
@@ -310,41 +311,31 @@ namespace BTCPayServer.Controllers
             catch
             {
                 vm.GlobalError = "Invalid PSBT";
-                return View(nameof(WalletPSBTReady),vm);
+                return View(nameof(WalletPSBTReady), vm);
             }
-        
+
             switch (command)
             {
                 case "payjoin":
                     string error = null;
                     try
                     {
-                        var proposedPayjoin = await GetPayjoinProposedTX(vm.PayJoinEndpointUrl, psbt,
+                        var proposedPayjoin = await GetPayjoinProposedTX(new BitcoinUrlBuilder(vm.SigningContext.PayJoinBIP21, network.NBitcoinNetwork), psbt,
                             derivationSchemeSettings, network, cancellationToken);
                         try
                         {
                             var extKey = ExtKey.Parse(vm.SigningKey, network.NBitcoinNetwork);
                             proposedPayjoin = proposedPayjoin.SignAll(derivationSchemeSettings.AccountDerivation,
                                 extKey,
-                                RootedKeyPath.Parse(vm.SigningKeyPath));
-                            vm.PSBT = proposedPayjoin.ToBase64();
-                            vm.OriginalPSBT = psbt.ToBase64();
+                                RootedKeyPath.Parse(vm.SigningKeyPath), new SigningOptions()
+                                {
+                                    EnforceLowR = !(vm.SigningContext?.EnforceLowR is false)
+                                });
+                            vm.SigningContext.PSBT = proposedPayjoin.ToBase64();
+                            vm.SigningContext.OriginalPSBT = psbt.ToBase64();
                             proposedPayjoin.Finalize();
                             var hash = proposedPayjoin.ExtractTransaction().GetHash();
-                            _EventAggregator.Publish(new UpdateTransactionLabel()
-                            {
-                                WalletId = walletId,
-                                TransactionLabels = new Dictionary<uint256, List<(string color, string label)>>()
-                                {
-                                    {
-                                        hash,
-                                        new List<(string color, string label)>
-                                        {
-                                            UpdateTransactionLabel.PayjoinLabelTemplate()
-                                        }
-                                    }
-                                }
-                            });
+                            _EventAggregator.Publish(new UpdateTransactionLabel(walletId, hash, UpdateTransactionLabel.PayjoinLabelTemplate()));
                             TempData.SetStatusMessageModel(new StatusMessageModel()
                             {
                                 Severity = StatusMessageModel.StatusSeverity.Success,
@@ -364,7 +355,9 @@ namespace BTCPayServer.Controllers
                                     $"The amount being sent may appear higher but is in fact almost same.<br/><br/>" +
                                     $"If you cancel or refuse to sign this transaction, the payment will proceed without payjoin"
                             });
-                            return ViewVault(walletId, proposedPayjoin, vm.PayJoinEndpointUrl, psbt);
+                            vm.SigningContext.PSBT = proposedPayjoin.ToBase64();
+                            vm.SigningContext.OriginalPSBT = psbt.ToBase64();
+                            return ViewVault(walletId, vm.SigningContext);
                         }
                     }
                     catch (PayjoinReceiverException ex)
@@ -379,7 +372,7 @@ namespace BTCPayServer.Controllers
                     {
                         error = $"Unexpected payjoin error: {ex.Message}";
                     }
-                    
+
                     //we possibly exposed the tx to the receiver, so we need to broadcast straight away
                     psbt.Finalize();
                     TempData.SetStatusMessageModel(new StatusMessageModel()
@@ -393,49 +386,52 @@ namespace BTCPayServer.Controllers
                     return await WalletPSBTReady(walletId, vm, "broadcast");
                 case "broadcast" when !psbt.IsAllFinalized() && !psbt.TryFinalize(out var errors):
                     vm.SetErrors(errors);
-                    return View(nameof(WalletPSBTReady),vm);
+                    return View(nameof(WalletPSBTReady), vm);
                 case "broadcast":
-                {
-                    var transaction = psbt.ExtractTransaction();
-                    try
                     {
-                        var broadcastResult = await ExplorerClientProvider.GetExplorerClient(network).BroadcastAsync(transaction);
-                        if (!broadcastResult.Success)
+                        var transaction = psbt.ExtractTransaction();
+                        try
                         {
-                            if (!string.IsNullOrEmpty(vm.OriginalPSBT))
+                            var broadcastResult = await ExplorerClientProvider.GetExplorerClient(network).BroadcastAsync(transaction);
+                            if (!broadcastResult.Success)
                             {
-                                TempData.SetStatusMessageModel(new StatusMessageModel()
+                                if (!string.IsNullOrEmpty(vm.SigningContext.OriginalPSBT))
                                 {
-                                    Severity = StatusMessageModel.StatusSeverity.Warning,
-                                    AllowDismiss = false,
-                                    Html = $"The payjoin transaction could not be broadcasted.<br/>({broadcastResult.RPCCode} {broadcastResult.RPCCodeMessage} {broadcastResult.RPCMessage}).<br/>The transaction has been reverted back to its original format and has been broadcast."
-                                });
-                                vm.PSBT = vm.OriginalPSBT;
-                                vm.OriginalPSBT = null;
-                                return await WalletPSBTReady(walletId, vm, "broadcast");
-                            }
-                        
-                            vm.GlobalError = $"RPC Error while broadcasting: {broadcastResult.RPCCode} {broadcastResult.RPCCodeMessage} {broadcastResult.RPCMessage}";
-                            return View(nameof(WalletPSBTReady),vm);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        vm.GlobalError = "Error while broadcasting: " + ex.Message;
-                        return View(nameof(WalletPSBTReady),vm);
-                    }
+                                    TempData.SetStatusMessageModel(new StatusMessageModel()
+                                    {
+                                        Severity = StatusMessageModel.StatusSeverity.Warning,
+                                        AllowDismiss = false,
+                                        Html = $"The payjoin transaction could not be broadcasted.<br/>({broadcastResult.RPCCode} {broadcastResult.RPCCodeMessage} {broadcastResult.RPCMessage}).<br/>The transaction has been reverted back to its original format and has been broadcast."
+                                    });
+                                    vm.SigningContext.PSBT = vm.SigningContext.OriginalPSBT;
+                                    vm.SigningContext.OriginalPSBT = null;
+                                    return await WalletPSBTReady(walletId, vm, "broadcast");
+                                }
 
-                    if (!TempData.HasStatusMessage())
-                    {
-                        TempData[WellKnownTempData.SuccessMessage] = $"Transaction broadcasted successfully ({transaction.GetHash()})";
+                                vm.GlobalError = $"RPC Error while broadcasting: {broadcastResult.RPCCode} {broadcastResult.RPCCodeMessage} {broadcastResult.RPCMessage}";
+                                return View(nameof(WalletPSBTReady), vm);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            vm.GlobalError = "Error while broadcasting: " + ex.Message;
+                            return View(nameof(WalletPSBTReady), vm);
+                        }
+
+                        if (!TempData.HasStatusMessage())
+                        {
+                            TempData[WellKnownTempData.SuccessMessage] = $"Transaction broadcasted successfully ({transaction.GetHash()})";
+                        }
+                        return RedirectToWalletTransaction(walletId, transaction);
                     }
-                    return RedirectToWalletTransaction(walletId, transaction);
-                }
                 case "analyze-psbt":
-                    return RedirectToWalletPSBT(psbt);
+                    return RedirectToWalletPSBT(new WalletPSBTViewModel()
+                    {
+                        PSBT = psbt.ToBase64()
+                    });
                 default:
                     vm.GlobalError = "Unknown command";
-                    return View(nameof(WalletPSBTReady),vm);
+                    return View(nameof(WalletPSBTReady), vm);
             }
         }
 
@@ -464,7 +460,44 @@ namespace BTCPayServer.Controllers
             }
             sourcePSBT = sourcePSBT.Combine(psbt);
             TempData[WellKnownTempData.SuccessMessage] = "PSBT Successfully combined!";
-            return RedirectToWalletPSBT(sourcePSBT);
+            return RedirectToWalletPSBT(new WalletPSBTViewModel()
+            {
+                PSBT = sourcePSBT.ToBase64()
+            });
+        }
+
+        private async Task<IActionResult> TryHandleSigningCommands(WalletId walletId, PSBT psbt, string command,
+            SigningContextModel signingContext)
+        {
+            signingContext.PSBT = psbt.ToBase64();
+            switch (command)
+            {
+                case "vault":
+                    return ViewVault(walletId, signingContext);
+                case "seed":
+                    return SignWithSeed(walletId, signingContext);
+                case "nbx-seed":
+                    if (await CanUseHotWallet())
+                    {
+                        var derivationScheme = GetDerivationSchemeSettings(walletId);
+                        if (derivationScheme.IsHotWallet)
+                        {
+                            var extKey = await ExplorerClientProvider.GetExplorerClient(walletId.CryptoCode)
+                                .GetMetadataAsync<string>(derivationScheme.AccountDerivation,
+                                    WellknownMetadataKeys.MasterHDKey);
+                            return SignWithSeed(walletId,
+                                new SignWithSeedViewModel() { SeedOrKey = extKey, SigningContext = signingContext });
+                        }
+                    }
+                    TempData.SetStatusMessageModel(new StatusMessageModel()
+                    {
+                        Severity = StatusMessageModel.StatusSeverity.Error,
+                        Message = "NBX seed functionality is not available"
+                    });
+                    break;
+            }
+
+            return null;
         }
     }
 }

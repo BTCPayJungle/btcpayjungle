@@ -1,9 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using NBitcoin;
-
 namespace BTCPayServer.Payments.Lightning
 {
     public class LightningLikePaymentMethodDetails : IPaymentMethodDetails
@@ -27,13 +21,9 @@ namespace BTCPayServer.Payments.Lightning
             return 0.0m;
         }
 
-        public decimal GetFeeRate() {
-            return 0.0m;
-        }
-
-        public void SetPaymentDestination(string newPaymentDestination)
+        public decimal GetFeeRate()
         {
-            BOLT11 = newPaymentDestination;
+            return 0.0m;
         }
     }
 }

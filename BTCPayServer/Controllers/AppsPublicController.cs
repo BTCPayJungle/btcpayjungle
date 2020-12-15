@@ -1,22 +1,23 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
+using BTCPayServer.Abstractions.Extensions;
+using BTCPayServer.Abstractions.Models;
 using BTCPayServer.Configuration;
 using BTCPayServer.Data;
 using BTCPayServer.Filters;
 using BTCPayServer.ModelBinders;
 using BTCPayServer.Models;
 using BTCPayServer.Models.AppViewModels;
-using BTCPayServer.Security;
 using BTCPayServer.Services.Apps;
 using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using NBitpayClient;
 using static BTCPayServer.Controllers.AppsController;
 
 namespace BTCPayServer.Controllers
@@ -39,24 +40,42 @@ namespace BTCPayServer.Controllers
         private readonly InvoiceController _InvoiceController;
         private readonly UserManager<ApplicationUser> _UserManager;
 
+        [HttpGet("/apps/{appId}")]
+        public async Task<IActionResult> RedirectToApp(string appId)
+        {
+           
+            switch ((await _AppService.GetApp(appId, null)).AppType)
+            {
+                case nameof(AppType.Crowdfund):
+                    return RedirectToAction("ViewCrowdfund", new {appId});
+                
+                case nameof(AppType.PointOfSale):
+                    return RedirectToAction("ViewPointOfSale", new {appId});
+            }
+
+            return NotFound();
+        }
+        
         [HttpGet]
-        [Route("/apps/{appId}/pos")]
+        [Route("/apps/{appId}/pos/{viewType?}")]
         [XFrameOptionsAttribute(XFrameOptionsAttribute.XFrameOptions.AllowAll)]
-        public async Task<IActionResult> ViewPointOfSale(string appId)
+        public async Task<IActionResult> ViewPointOfSale(string appId, PosViewType? viewType = null)
         {
             var app = await _AppService.GetApp(appId, AppType.PointOfSale);
             if (app == null)
                 return NotFound();
             var settings = app.GetSettings<PointOfSaleSettings>();
-
             var numberFormatInfo = _AppService.Currencies.GetNumberFormatInfo(settings.Currency) ?? _AppService.Currencies.GetNumberFormatInfo("USD");
             double step = Math.Pow(10, -(numberFormatInfo.CurrencyDecimalDigits));
+            viewType ??= settings.EnableShoppingCart ? PosViewType.Cart : settings.DefaultView;
+            var store = await _AppService.GetStore(app);
+            var storeBlob = store.GetStoreBlob();
 
-            return View(new ViewPointOfSaleViewModel()
+            return View("PointOfSale/" + viewType, new ViewPointOfSaleViewModel()
             {
                 Title = settings.Title,
                 Step = step.ToString(CultureInfo.InvariantCulture),
-                EnableShoppingCart = settings.EnableShoppingCart,
+                ViewType = (PosViewType)viewType,
                 ShowCustomAmount = settings.ShowCustomAmount,
                 ShowDiscount = settings.ShowDiscount,
                 EnableTips = settings.EnableTips,
@@ -77,6 +96,7 @@ namespace BTCPayServer.Controllers
                 CustomTipText = settings.CustomTipText,
                 CustomTipPercentages = settings.CustomTipPercentages,
                 CustomCSSLink = settings.CustomCSSLink,
+                CustomLogoLink = storeBlob.CustomLogo,
                 AppId = appId,
                 Description = settings.Description,
                 EmbeddedCSS = settings.EmbeddedCSS
@@ -84,11 +104,12 @@ namespace BTCPayServer.Controllers
         }
 
         [HttpPost]
-        [Route("/apps/{appId}/pos")]
+        [Route("/apps/{appId}/pos/{viewType?}")]
         [XFrameOptionsAttribute(XFrameOptionsAttribute.XFrameOptions.AllowAll)]
         [IgnoreAntiforgeryToken]
         [EnableCors(CorsPolicies.All)]
         public async Task<IActionResult> ViewPointOfSale(string appId,
+                                                        PosViewType viewType,
                                                         [ModelBinder(typeof(InvariantDecimalModelBinder))] decimal amount,
                                                         string email,
                                                         string orderId,
@@ -105,12 +126,14 @@ namespace BTCPayServer.Controllers
             if (app == null)
                 return NotFound();
             var settings = app.GetSettings<PointOfSaleSettings>();
-            if (string.IsNullOrEmpty(choiceKey) && !settings.ShowCustomAmount && !settings.EnableShoppingCart)
+            settings.DefaultView = settings.EnableShoppingCart ? PosViewType.Cart : settings.DefaultView;
+            if (string.IsNullOrEmpty(choiceKey) && !settings.ShowCustomAmount && settings.DefaultView != PosViewType.Cart)
             {
-                return RedirectToAction(nameof(ViewPointOfSale), new { appId = appId });
+                return RedirectToAction(nameof(ViewPointOfSale), new { appId = appId, viewType = viewType });
             }
             string title = null;
             var price = 0.0m;
+            Dictionary<string, InvoiceSupportedTransactionCurrency> paymentMethods = null;
             ViewPointOfSaleViewModel.Item choice = null;
             if (!string.IsNullOrEmpty(choiceKey))
             {
@@ -130,20 +153,26 @@ namespace BTCPayServer.Controllers
                         return RedirectToAction(nameof(ViewPointOfSale), new { appId = appId });
                     }
                 }
+
+                if (choice?.PaymentMethods?.Any() is true)
+                {
+                    paymentMethods = choice?.PaymentMethods.ToDictionary(s => s,
+                        s => new InvoiceSupportedTransactionCurrency() { Enabled = true });
+                }
             }
             else
             {
-                if (!settings.ShowCustomAmount && !settings.EnableShoppingCart)
+                if (!settings.ShowCustomAmount && settings.DefaultView != PosViewType.Cart)
                     return NotFound();
                 price = amount;
                 title = settings.Title;
-                
+
                 //if cart IS enabled and we detect posdata that matches the cart system's, check inventory for the items
-                if (!string.IsNullOrEmpty(posData) && 
-                    settings.EnableShoppingCart && 
+                if (!string.IsNullOrEmpty(posData) &&
+                    settings.DefaultView == PosViewType.Cart &&
                     AppService.TryParsePosCartItems(posData, out var cartItems))
                 {
-                        
+
                     var choices = _AppService.Parse(settings.Template, settings.Currency);
                     foreach (var cartItem in cartItems)
                     {
@@ -156,9 +185,9 @@ namespace BTCPayServer.Controllers
                             switch (itemChoice.Inventory)
                             {
                                 case int i when i <= 0:
-                                    return RedirectToAction(nameof(ViewPointOfSale), new {appId});
+                                    return RedirectToAction(nameof(ViewPointOfSale), new { appId });
                                 case int inventory when inventory < cartItem.Value:
-                                    return RedirectToAction(nameof(ViewPointOfSale), new {appId});
+                                    return RedirectToAction(nameof(ViewPointOfSale), new { appId });
                             }
                         }
                     }
@@ -167,7 +196,7 @@ namespace BTCPayServer.Controllers
             var store = await _AppService.GetStore(app);
             try
             {
-                var invoice = await _InvoiceController.CreateInvoiceCore(new CreateInvoiceRequest()
+                var invoice = await _InvoiceController.CreateInvoiceCore(new BitpayCreateInvoiceRequest()
                 {
                     ItemCode = choice?.Id,
                     ItemDesc = title,
@@ -177,11 +206,14 @@ namespace BTCPayServer.Controllers
                     OrderId = orderId,
                     NotificationURL =
                             string.IsNullOrEmpty(notificationUrl) ? settings.NotificationUrl : notificationUrl,
-                    RedirectURL = redirectUrl ?? Request.GetDisplayUrl(),
+                    RedirectURL = !string.IsNullOrEmpty(redirectUrl) ? redirectUrl
+                                : !string.IsNullOrEmpty(settings.RedirectUrl) ? settings.RedirectUrl
+                                : Request.GetDisplayUrl(),
                     FullNotifications = true,
                     ExtendedNotifications = true,
                     PosData = string.IsNullOrEmpty(posData) ? null : posData,
                     RedirectAutomatically = settings.RedirectAutomatically,
+                    SupportedTransactionCurrencies = paymentMethods,
                 }, store, HttpContext.Request.GetAbsoluteRoot(),
                     new List<string>() { AppService.GetAppInternalTag(appId) },
                     cancellationToken);
@@ -189,8 +221,8 @@ namespace BTCPayServer.Controllers
             }
             catch (BitpayHttpException e)
             {
-                TempData.SetStatusMessageModel(new StatusMessageModel() 
-                { 
+                TempData.SetStatusMessageModel(new StatusMessageModel()
+                {
                     Html = e.Message.Replace("\n", "<br />", StringComparison.OrdinalIgnoreCase),
                     Severity = StatusMessageModel.StatusSeverity.Error,
                     AllowDismiss = true
@@ -270,6 +302,7 @@ namespace BTCPayServer.Controllers
             var store = await _AppService.GetStore(app);
             var title = settings.Title;
             var price = request.Amount;
+            Dictionary<string, InvoiceSupportedTransactionCurrency> paymentMethods = null;
             ViewPointOfSaleViewModel.Item choice = null;
             if (!string.IsNullOrEmpty(request.ChoiceKey))
             {
@@ -281,14 +314,21 @@ namespace BTCPayServer.Controllers
                 price = choice.Price.Value;
                 if (request.Amount > price)
                     price = request.Amount;
-                
-                
+
+
                 if (choice.Inventory.HasValue)
                 {
                     if (choice.Inventory <= 0)
                     {
                         return NotFound("Option was out of stock");
                     }
+                }
+
+
+                if (choice?.PaymentMethods?.Any() is true)
+                {
+                    paymentMethods = choice?.PaymentMethods.ToDictionary(s => s,
+                        s => new InvoiceSupportedTransactionCurrency() { Enabled = true });
                 }
             }
 
@@ -300,21 +340,22 @@ namespace BTCPayServer.Controllers
 
             try
             {
-                var invoice = await _InvoiceController.CreateInvoiceCore(new CreateInvoiceRequest()
-                    {
-                        OrderId = AppService.GetCrowdfundOrderId(appId),
-                        Currency = settings.TargetCurrency,
-                        ItemCode = request.ChoiceKey ?? string.Empty,
-                        ItemDesc = title,
-                        BuyerEmail = request.Email,
-                        Price = price,
-                        NotificationURL = settings.NotificationUrl,
-                        FullNotifications = true,
-                        ExtendedNotifications = true,
-                        RedirectURL = request.RedirectUrl ?? 
-                                     new Uri(new Uri( new Uri(HttpContext.Request.GetAbsoluteRoot()),  _BtcPayServerOptions.RootPath), $"apps/{appId}/crowdfund").ToString()
-                    }, store, HttpContext.Request.GetAbsoluteRoot(),
-                    new List<string> {AppService.GetAppInternalTag(appId)},
+                var invoice = await _InvoiceController.CreateInvoiceCore(new BitpayCreateInvoiceRequest()
+                {
+                    OrderId = AppService.GetCrowdfundOrderId(appId),
+                    Currency = settings.TargetCurrency,
+                    ItemCode = request.ChoiceKey ?? string.Empty,
+                    ItemDesc = title,
+                    BuyerEmail = request.Email,
+                    Price = price,
+                    NotificationURL = settings.NotificationUrl,
+                    FullNotifications = true,
+                    ExtendedNotifications = true,
+                    SupportedTransactionCurrencies = paymentMethods,
+                    RedirectURL = request.RedirectUrl ??
+                                     new Uri(new Uri(new Uri(HttpContext.Request.GetAbsoluteRoot()), _BtcPayServerOptions.RootPath), $"apps/{appId}/crowdfund").ToString()
+                }, store, HttpContext.Request.GetAbsoluteRoot(),
+                    new List<string> { AppService.GetAppInternalTag(appId) },
                     cancellationToken: cancellationToken);
                 if (request.RedirectToCheckout)
                 {

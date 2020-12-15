@@ -18,6 +18,8 @@ namespace BTCPayServer.Client
         private readonly string _password;
         private readonly HttpClient _httpClient;
 
+        public Uri Host => _btcpayHost;
+
         public string APIKey => _apiKey;
 
         public BTCPayServerClient(Uri btcpayHost, HttpClient httpClient = null)
@@ -33,7 +35,7 @@ namespace BTCPayServer.Client
             _btcpayHost = btcpayHost;
             _httpClient = httpClient ?? new HttpClient();
         }
-        
+
         public BTCPayServerClient(Uri btcpayHost, string username, string password, HttpClient httpClient = null)
         {
             _apiKey = APIKey;
@@ -43,22 +45,35 @@ namespace BTCPayServer.Client
             _httpClient = httpClient ?? new HttpClient();
         }
 
-        protected void HandleResponse(HttpResponseMessage message)
+        protected async Task HandleResponse(HttpResponseMessage message)
         {
+            if (message.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity)
+            {
+                var err = JsonConvert.DeserializeObject<Models.GreenfieldValidationError[]>(await message.Content.ReadAsStringAsync());
+                ;
+                throw new GreenFieldValidationException(err);
+            }
+            else if (message.StatusCode == System.Net.HttpStatusCode.BadRequest)
+            {
+                var err = JsonConvert.DeserializeObject<Models.GreenfieldAPIError>(await message.Content.ReadAsStringAsync());
+                throw new GreenFieldAPIException(err);
+            }
+
             message.EnsureSuccessStatusCode();
         }
 
         protected async Task<T> HandleResponse<T>(HttpResponseMessage message)
         {
-            HandleResponse(message);
-            return JsonConvert.DeserializeObject<T>(await message.Content.ReadAsStringAsync());
+            await HandleResponse(message);
+            var str = await message.Content.ReadAsStringAsync();
+            return JsonConvert.DeserializeObject<T>(str);
         }
 
         protected virtual HttpRequestMessage CreateHttpRequest(string path,
             Dictionary<string, object> queryPayload = null,
             HttpMethod method = null)
         {
-            UriBuilder uriBuilder = new UriBuilder(_btcpayHost) {Path = path};
+            UriBuilder uriBuilder = new UriBuilder(_btcpayHost) { Path = path };
             if (queryPayload != null && queryPayload.Any())
             {
                 AppendPayloadToQuery(uriBuilder, queryPayload);
@@ -89,29 +104,37 @@ namespace BTCPayServer.Client
             return request;
         }
 
-        private static void AppendPayloadToQuery(UriBuilder uri, Dictionary<string, object> payload)
+        public static void AppendPayloadToQuery(UriBuilder uri, KeyValuePair<string, object> keyValuePair)
+        {
+            if (uri.Query.Length > 1)
+                uri.Query += "&";
+
+            UriBuilder uriBuilder = uri;
+            if (!(keyValuePair.Value is string) &&
+                keyValuePair.Value.GetType().GetInterfaces().Contains((typeof(IEnumerable))))
+            {
+                foreach (var item in (IEnumerable)keyValuePair.Value)
+                {
+                    uriBuilder.Query = uriBuilder.Query + Uri.EscapeDataString(keyValuePair.Key) + "=" +
+                                       Uri.EscapeDataString(item.ToString()) + "&";
+                }
+            }
+            else
+            {
+                uriBuilder.Query = uriBuilder.Query + Uri.EscapeDataString(keyValuePair.Key) + "=" +
+                                   Uri.EscapeDataString(keyValuePair.Value.ToString()) + "&";
+            }
+            uri.Query = uri.Query.Trim('&');
+        }
+
+        public static void AppendPayloadToQuery(UriBuilder uri, Dictionary<string, object> payload)
         {
             if (uri.Query.Length > 1)
                 uri.Query += "&";
             foreach (KeyValuePair<string, object> keyValuePair in payload)
             {
-                UriBuilder uriBuilder = uri;
-                if (!(keyValuePair.Value is string) && keyValuePair.Value.GetType().GetInterfaces().Contains((typeof(IEnumerable))))
-                {
-                    foreach (var item in (IEnumerable)keyValuePair.Value)
-                    {
-                        uriBuilder.Query = uriBuilder.Query + Uri.EscapeDataString(keyValuePair.Key) + "=" +
-                                           Uri.EscapeDataString(item.ToString()) + "&";
-                    }
-                }
-                else
-                {
-                    uriBuilder.Query = uriBuilder.Query + Uri.EscapeDataString(keyValuePair.Key) + "=" +
-                                       Uri.EscapeDataString(keyValuePair.Value.ToString()) + "&";
-                }
+                AppendPayloadToQuery(uri, keyValuePair);
             }
-
-            uri.Query = uri.Query.Trim('&');
         }
     }
 }

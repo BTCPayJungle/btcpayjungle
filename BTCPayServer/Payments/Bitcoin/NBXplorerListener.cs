@@ -1,28 +1,23 @@
-﻿using System;
-using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using BTCPayServer.Logging;
-using BTCPayServer.Services.Invoices;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Hosting;
-using NBXplorer;
-using System.Collections.Concurrent;
-using BTCPayServer.Controllers;
-using NBXplorer.DerivationStrategy;
-using BTCPayServer.Events;
-using BTCPayServer.Services;
-using BTCPayServer.Services.Wallets;
-using NBitcoin;
-using NBXplorer.Models;
-using BTCPayServer.Payments;
-using BTCPayServer.HostedServices;
-using BTCPayServer.Payments.PayJoin;
-using NBitcoin.Altcoins.Elements;
-using NBitcoin.RPC;
 using BTCPayServer;
+using BTCPayServer.Events;
+using BTCPayServer.HostedServices;
+using BTCPayServer.Logging;
+using BTCPayServer.Payments.PayJoin;
+using BTCPayServer.Services.Invoices;
+using BTCPayServer.Services.Wallets;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using NBitcoin;
+using NBitcoin.RPC;
+using NBXplorer;
+using NBXplorer.DerivationStrategy;
+using NBXplorer.Models;
 
 namespace BTCPayServer.Payments.Bitcoin
 {
@@ -31,14 +26,14 @@ namespace BTCPayServer.Payments.Bitcoin
     /// </summary>
     public class NBXplorerListener : IHostedService
     {
-        EventAggregator _Aggregator;
+        readonly EventAggregator _Aggregator;
         private readonly PayJoinRepository _payJoinRepository;
-        ExplorerClientProvider _ExplorerClients;
-        IHostApplicationLifetime _Lifetime;
-        InvoiceRepository _InvoiceRepository;
+        readonly ExplorerClientProvider _ExplorerClients;
+        readonly IHostApplicationLifetime _Lifetime;
+        readonly InvoiceRepository _InvoiceRepository;
         private TaskCompletionSource<bool> _RunningTask;
         private CancellationTokenSource _Cts;
-        BTCPayWalletProvider _Wallets;
+        readonly BTCPayWalletProvider _Wallets;
         public NBXplorerListener(ExplorerClientProvider explorerClients,
                                 BTCPayWalletProvider wallets,
                                 InvoiceRepository invoiceRepository,
@@ -55,8 +50,8 @@ namespace BTCPayServer.Payments.Bitcoin
             _Lifetime = lifetime;
         }
 
-        CompositeDisposable leases = new CompositeDisposable();
-        ConcurrentDictionary<string, WebsocketNotificationSession> _SessionsByCryptoCode = new ConcurrentDictionary<string, WebsocketNotificationSession>();
+        readonly CompositeDisposable leases = new CompositeDisposable();
+        readonly ConcurrentDictionary<string, WebsocketNotificationSession> _SessionsByCryptoCode = new ConcurrentDictionary<string, WebsocketNotificationSession>();
         private Timer _ListenPoller;
 
         TimeSpan _PollInterval;
@@ -143,9 +138,7 @@ namespace BTCPayServer.Payments.Bitcoin
                         switch (newEvent)
                         {
                             case NBXplorer.Models.NewBlockEvent evt:
-                                await Task.WhenAll((await _InvoiceRepository.GetPendingInvoices())
-                                    .Select(invoiceId => UpdatePaymentStates(wallet, invoiceId))
-                                    .ToArray());
+                                await UpdatePaymentStates(wallet, await _InvoiceRepository.GetPendingInvoices());
                                 _Aggregator.Publish(new Events.NewBlockEvent() { CryptoCode = evt.CryptoCode });
                                 break;
                             case NBXplorer.Models.NewTransactionEvent evt:
@@ -162,8 +155,8 @@ namespace BTCPayServer.Payments.Bitcoin
 
                                         var paymentData = new BitcoinLikePaymentData(address,
                                             output.matchedOutput.Value, output.outPoint,
-                                            evt.TransactionData.Transaction.RBF);
-                                        
+                                            evt.TransactionData.Transaction.RBF, output.Item1.KeyPath);
+
                                         var alreadyExist = invoice.GetAllBitcoinPaymentData().Where(c => c.GetPaymentId() == paymentData.GetPaymentId()).Any();
                                         if (!alreadyExist)
                                         {
@@ -211,11 +204,21 @@ namespace BTCPayServer.Payments.Bitcoin
             }
         }
 
+        async Task UpdatePaymentStates(BTCPayWallet wallet, string[] invoiceIds)
+        {
+            var invoices = await _InvoiceRepository.GetInvoices(invoiceIds);
+            await Task.WhenAll(invoices.Select(i => UpdatePaymentStates(wallet, i)).ToArray());
+        }
         async Task<InvoiceEntity> UpdatePaymentStates(BTCPayWallet wallet, string invoiceId)
         {
             var invoice = await _InvoiceRepository.GetInvoice(invoiceId, false);
             if (invoice == null)
                 return null;
+            return await UpdatePaymentStates(wallet, invoice);
+        }
+        async Task<InvoiceEntity> UpdatePaymentStates(BTCPayWallet wallet, InvoiceEntity invoice)
+        {
+
             List<PaymentEntity> updatedPaymentEntities = new List<PaymentEntity>();
             var transactions = await wallet.GetTransactions(invoice.GetAllBitcoinPaymentData()
                     .Select(p => p.Outpoint.Hash)
@@ -227,7 +230,7 @@ namespace BTCPayServer.Payments.Bitcoin
             var paymentEntitiesByPrevOut = new Dictionary<OutPoint, PaymentEntity>();
             foreach (var payment in invoice.GetPayments(wallet.Network))
             {
-                if (payment.GetPaymentMethodId().PaymentType != PaymentTypes.BTCLike)
+                if (payment.GetPaymentMethodId()?.PaymentType != PaymentTypes.BTCLike)
                     continue;
                 var paymentData = (BitcoinLikePaymentData)payment.GetCryptoPaymentData();
                 if (!transactions.TryGetValue(paymentData.Outpoint.Hash, out TransactionResult tx))
@@ -293,7 +296,7 @@ namespace BTCPayServer.Payments.Bitcoin
                     payment.Accounted = accounted;
                     updated = true;
                 }
-                
+
                 foreach (var prevout in tx.Transaction.Inputs.Select(o => o.PrevOut))
                 {
                     paymentEntitiesByPrevOut.TryAdd(prevout, payment);
@@ -350,7 +353,7 @@ namespace BTCPayServer.Payments.Bitcoin
                     continue;
                 var cryptoId = new PaymentMethodId(network.CryptoCode, PaymentTypes.BTCLike);
                 var paymentMethod = invoice.GetPaymentMethod(cryptoId).GetPaymentMethodDetails() as BitcoinLikeOnChainPaymentMethod;
-                
+
                 if (!invoice.Support(cryptoId))
                     continue;
 
@@ -368,8 +371,8 @@ namespace BTCPayServer.Payments.Bitcoin
                     var address = network.NBXplorerNetwork.CreateAddress(strategy, coin.KeyPath, coin.ScriptPubKey);
 
                     var paymentData = new BitcoinLikePaymentData(address, coin.Value, coin.OutPoint,
-                        transaction.Transaction.RBF);
-                    
+                        transaction?.Transaction is null ? true : transaction.Transaction.RBF, coin.KeyPath);
+
                     var payment = await _InvoiceRepository.AddPayment(invoice.Id, coin.Timestamp, paymentData, network).ConfigureAwait(false);
                     alreadyAccounted.Add(coin.OutPoint);
                     if (payment != null)
@@ -405,13 +408,14 @@ namespace BTCPayServer.Payments.Bitcoin
             {
                 var address = await wallet.ReserveAddressAsync(strategy);
                 btc.DepositAddress = address.Address.ToString();
-                await _InvoiceRepository.NewAddress(invoice.Id, btc, wallet.Network);
-                _Aggregator.Publish(new InvoiceNewAddressEvent(invoice.Id, btc.DepositAddress, wallet.Network));
+                btc.KeyPath = address.KeyPath;
+                await _InvoiceRepository.NewPaymentDetails(invoice.Id, btc, wallet.Network);
+                _Aggregator.Publish(new InvoiceNewPaymentDetailsEvent(invoice.Id, btc, paymentMethod.GetId()));
                 paymentMethod.SetPaymentMethodDetails(btc);
                 invoice.SetPaymentMethod(paymentMethod);
             }
             wallet.InvalidateCache(strategy);
-            _Aggregator.Publish(new InvoiceEvent(invoice, 1002, InvoiceEvent.ReceivedPayment) { Payment = payment });
+            _Aggregator.Publish(new InvoiceEvent(invoice, InvoiceEvent.ReceivedPayment) { Payment = payment });
             return invoice;
         }
         public async Task StopAsync(CancellationToken cancellationToken)

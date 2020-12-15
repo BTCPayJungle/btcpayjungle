@@ -1,15 +1,13 @@
-﻿using System;
-using Microsoft.Extensions.Logging;
-using NBitcoin;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
-using NBXplorer;
-using System.Threading.Channels;
 using System.Threading;
+using System.Threading.Tasks;
 using BTCPayServer.Data;
 using BTCPayServer.Logging;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using NBitcoin;
 
 namespace BTCPayServer.Services
 {
@@ -29,7 +27,7 @@ namespace BTCPayServer.Services
 
         public DelayedTransactionBroadcaster(
             BTCPayNetworkProvider networkProvider,
-            ExplorerClientProvider explorerClientProvider, 
+            ExplorerClientProvider explorerClientProvider,
             Data.ApplicationDbContextFactory dbContextFactory)
         {
             if (explorerClientProvider == null)
@@ -76,7 +74,7 @@ namespace BTCPayServer.Services
                     // Client side filtering because entity framework is retarded.
                     .Where(r => r.BroadcastTime < DateTimeOffset.UtcNow).ToList();
             }
-            
+
             List<Record> rescheduled = new List<Record>();
             List<Record> broadcasted = new List<Record>();
 
@@ -101,7 +99,7 @@ namespace BTCPayServer.Services
                     return true;
                 }
             }).ToArray();
-            
+
             for (int i = 0; i < scheduled.Count; i++)
             {
                 var needReschedule = await broadcasts[i];
@@ -112,7 +110,7 @@ namespace BTCPayServer.Services
             {
                 foreach (Record record in broadcasted)
                 {
-                    db.PlannedTransactions.Remove(new PlannedTransaction() {Id = record.Id});
+                    db.PlannedTransactions.Remove(new PlannedTransaction() { Id = record.Id });
                 }
                 return await db.SaveChangesAsync();
             }

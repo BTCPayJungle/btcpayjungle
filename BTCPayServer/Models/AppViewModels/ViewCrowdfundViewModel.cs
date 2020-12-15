@@ -1,8 +1,7 @@
-﻿using System;
-using System.Linq;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Threading.Tasks;
+using System.Linq;
 using BTCPayServer.Payments;
 using BTCPayServer.Services.Rates;
 
@@ -40,7 +39,7 @@ namespace BTCPayServer.Models.AppViewModels
         public Dictionary<string, int> PerkCount { get; set; }
 
         public CurrencyData CurrencyData { get; set; }
-        
+
         public class CrowdfundInfo
         {
             public int TotalContributors { get; set; }
@@ -56,7 +55,7 @@ namespace BTCPayServer.Models.AppViewModels
         }
         public class Contribution
         {
-            public PaymentMethodId PaymentMehtodId { get; set; }
+            public PaymentMethodId PaymentMethodId { get; set; }
             public decimal Value { get; set; }
             public decimal CurrencyValue { get; set; }
         }
@@ -69,9 +68,9 @@ namespace BTCPayServer.Models.AppViewModels
             public decimal TotalCurrency { get; }
         }
 
-        public bool Started => !StartDate.HasValue || DateTime.Now.ToUniversalTime() > StartDate;
+        public bool Started => !StartDate.HasValue || DateTime.UtcNow > StartDate;
 
-        public bool Ended => !EndDate.HasValue || DateTime.Now.ToUniversalTime() > EndDate;
+        public bool Ended => EndDate.HasValue && DateTime.UtcNow > EndDate;
         public bool DisplayPerksRanking { get; set; }
         public bool Enabled { get; set; }
         public string ResetEvery { get; set; }

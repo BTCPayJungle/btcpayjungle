@@ -1,4 +1,5 @@
-﻿@model (InvoiceDetailsModel Invoice, bool ShowAddress) 
+@using BTCPayServer.Client.Models
+@model (InvoiceDetailsModel Invoice, bool ShowAddress) 
 @{ var invoice = Model.Invoice; }
 @inject PaymentMethodHandlerDictionary PaymentMethodHandlerDictionary
 
@@ -30,7 +31,7 @@
                     @if (Model.ShowAddress)
                     {
                     <td title="@payment.Address">
-                        <span  class="text-truncate d-block" style="max-width: 400px">@payment.Address</span>
+                        <span class="text-truncate d-block" style="max-width: 400px">@payment.Address</span>
                     </td>
                     }
                     <td class="text-right">@payment.Rate</td>
@@ -47,7 +48,7 @@
     </div>
 </div>
 @{
-    var grouped = invoice.Payments.GroupBy(payment => payment.GetPaymentMethodId().PaymentType);    
+    var grouped = invoice.Payments.GroupBy(payment => payment.GetPaymentMethodId()?.PaymentType).Where(entities => entities.Key!= null);    
 }
 @foreach (var paymentGroup in grouped)
 {

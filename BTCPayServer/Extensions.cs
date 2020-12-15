@@ -1,47 +1,57 @@
-﻿using BTCPayServer.Configuration;
-using Microsoft.AspNetCore.Html;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Serialization;
 using System;
 using System.Collections.Generic;
-using System.Text;
-using System.Text.Encodings.Web;
-using NBitcoin;
-using System.Threading.Tasks;
-using NBXplorer;
-using NBXplorer.Models;
-using System.Linq;
-using System.Threading;
-using BTCPayServer.Services.Wallets;
-using System.IO;
-using BTCPayServer.Logging;
-using Microsoft.Extensions.Logging;
-using System.Net.WebSockets;
-using BTCPayServer.Services.Invoices;
-using NBitpayClient;
-using BTCPayServer.Payments;
-using Microsoft.AspNetCore.Identity;
-using BTCPayServer.Models;
-using System.Security.Claims;
 using System.Globalization;
-using BTCPayServer.Services;
-using BTCPayServer.Data;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using NBXplorer.DerivationStrategy;
+using System.Linq;
 using System.Net;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.ViewFeatures;
-using Newtonsoft.Json.Linq;
+using System.Net.WebSockets;
+using System.Reflection;
+using System.Security.Claims;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using BTCPayServer.Abstractions.Models;
+using BTCPayServer.Configuration;
+using BTCPayServer.Data;
+using BTCPayServer.Lightning;
+using BTCPayServer.Models;
+using BTCPayServer.Models.StoreViewModels;
+using BTCPayServer.Payments;
 using BTCPayServer.Payments.Bitcoin;
+using BTCPayServer.Services;
+using BTCPayServer.Services.Invoices;
+using BTCPayServer.Services.Wallets;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using NBitcoin;
+using NBitcoin.Payment;
+using NBitpayClient;
+using NBXplorer.DerivationStrategy;
+using NBXplorer.Models;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace BTCPayServer
 {
     public static class Extensions
     {
+
+        public static bool TryGetPayjoinEndpoint(this BitcoinUrlBuilder bip21, out Uri endpoint)
+        {
+            endpoint = bip21.UnknowParameters.TryGetValue($"{PayjoinClient.BIP21EndpointKey}", out var uri) ? new Uri(uri, UriKind.Absolute) : null;
+            return endpoint != null;
+        }
+        public static bool IsInternalNode(this LightningConnectionString connectionString, LightningConnectionString internalLightning)
+        {
+            var internalDomain = internalLightning?.BaseUri?.DnsSafeHost;
+
+            return connectionString.ConnectionType == LightningConnectionType.CLightning ||
+                                  connectionString.BaseUri.DnsSafeHost == internalDomain ||
+                                  (internalDomain == "127.0.0.1" || internalDomain == "localhost");
+        }
+
         public static IQueryable<TEntity> Where<TEntity>(this Microsoft.EntityFrameworkCore.DbSet<TEntity> obj, System.Linq.Expressions.Expression<Func<TEntity, bool>> predicate) where TEntity : class
         {
             return System.Linq.Queryable.Where(obj, predicate);
@@ -53,23 +63,7 @@ namespace BTCPayServer
                 return value;
             return value.Length <= maxLength ? value : value.Substring(0, maxLength);
         }
-        public static IServiceCollection AddStartupTask<T>(this IServiceCollection services)
-            where T : class, IStartupTask
-            => services.AddTransient<IStartupTask, T>();
-        public static async Task StartWithTasksAsync(this IWebHost webHost, CancellationToken cancellationToken = default)
-        {
-            // Load all tasks from DI
-            var startupTasks = webHost.Services.GetServices<IStartupTask>();
 
-            // Execute all the tasks
-            foreach (var startupTask in startupTasks)
-            {
-                await startupTask.ExecuteAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            // Start the tasks as normal
-            await webHost.StartAsync(cancellationToken).ConfigureAwait(false);
-        }
         public static string PrettyPrint(this TimeSpan expiration)
         {
             StringBuilder builder = new StringBuilder();
@@ -90,23 +84,6 @@ namespace BTCPayServer
             for (int i = 0; i < precision; i++)
             {
                 value = value / 10m;
-            }
-            return value;
-        }
-        public static decimal RoundToSignificant(this decimal value, ref int divisibility)
-        {
-            if (value != 0m)
-            {
-                while (true)
-                {
-                    var rounded = decimal.Round(value, divisibility, MidpointRounding.AwayFromZero);
-                    if ((Math.Abs(rounded - value) / value) < 0.001m)
-                    {
-                        value = rounded;
-                        break;
-                    }
-                    divisibility++;
-                }
             }
             return value;
         }
@@ -141,8 +118,9 @@ namespace BTCPayServer
         public static IEnumerable<BitcoinLikePaymentData> GetAllBitcoinPaymentData(this InvoiceEntity invoice)
         {
             return invoice.GetPayments()
-                    .Where(p => p.GetPaymentMethodId().PaymentType == PaymentTypes.BTCLike)
-                    .Select(p => (BitcoinLikePaymentData)p.GetCryptoPaymentData());
+                .Where(p => p.GetPaymentMethodId()?.PaymentType == PaymentTypes.BTCLike)
+                .Select(p => (BitcoinLikePaymentData)p.GetCryptoPaymentData())
+                .Where(data => data != null);
         }
 
         public static async Task<Dictionary<uint256, TransactionResult>> GetTransactions(this BTCPayWallet client, uint256[] hashes, bool includeOffchain = false, CancellationToken cts = default(CancellationToken))
@@ -154,20 +132,21 @@ namespace BTCPayServer
             await Task.WhenAll(transactions).ConfigureAwait(false);
             return transactions.Select(t => t.Result).Where(t => t != null).ToDictionary(o => o.Transaction.GetHash());
         }
-        
+
         public static async Task<PSBT> UpdatePSBT(this ExplorerClientProvider explorerClientProvider, DerivationSchemeSettings derivationSchemeSettings, PSBT psbt)
         {
             var result = await explorerClientProvider.GetExplorerClient(psbt.Network.NetworkSet.CryptoCode).UpdatePSBTAsync(new UpdatePSBTRequest()
             {
                 PSBT = psbt,
-                DerivationScheme = derivationSchemeSettings.AccountDerivation
+                DerivationScheme = derivationSchemeSettings.AccountDerivation,
+                AlwaysIncludeNonWitnessUTXO = true
             });
             if (result == null)
                 return null;
             derivationSchemeSettings.RebaseKeyPaths(result.PSBT);
             return result.PSBT;
         }
-        
+
         public static string WithTrailingSlash(this string str)
         {
             if (str.EndsWith("/", StringComparison.InvariantCulture))
@@ -239,22 +218,14 @@ namespace BTCPayServer
                    server.EndsWith(".lan", StringComparison.OrdinalIgnoreCase) ||
                    server.IndexOf('.', StringComparison.OrdinalIgnoreCase) == -1;
             }
-            if(IPAddress.TryParse(server, out var ip))
+            if (IPAddress.TryParse(server, out var ip))
             {
                 return ip.IsLocal() || ip.IsRFC1918();
             }
             return false;
         }
 
-        public static void SetStatusMessageModel(this ITempDataDictionary tempData, StatusMessageModel statusMessage)
-        {
-            if (statusMessage == null)
-            {
-                tempData.Remove("StatusMessageModel");
-                return;
-            }
-            tempData["StatusMessageModel"] = JObject.FromObject(statusMessage).ToString(Formatting.None);
-        }
+        
 
         public static StatusMessageModel GetStatusMessageModel(this ITempDataDictionary tempData)
         {
@@ -288,7 +259,7 @@ namespace BTCPayServer
                 return false;
             return request.Host.Host.EndsWith(".onion", StringComparison.OrdinalIgnoreCase);
         }
-        
+
         public static bool IsOnion(this Uri uri)
         {
             if (uri == null || !uri.IsAbsoluteUri)
@@ -354,7 +325,7 @@ namespace BTCPayServer
         /// <returns></returns>
         public static string GetRelativePathOrAbsolute(this HttpRequest request, string path)
         {
-            if (!Uri.TryCreate(path, UriKind.RelativeOrAbsolute, out var uri) || 
+            if (!Uri.TryCreate(path, UriKind.RelativeOrAbsolute, out var uri) ||
                 uri.IsAbsoluteUri)
                 return path;
 
@@ -457,21 +428,39 @@ namespace BTCPayServer
             ctx.Items["BTCPAY.STORESDATA"] = storeData;
         }
 
-        private static JsonSerializerSettings jsonSettings = new JsonSerializerSettings { ContractResolver = new CamelCasePropertyNamesContractResolver() };
-        public static string ToJson(this object o)
+        public static IActionResult RedirectToRecoverySeedBackup(this Controller controller, RecoverySeedBackupViewModel vm)
         {
-            var res = JsonConvert.SerializeObject(o, Formatting.None, jsonSettings);
-            return res;
+            var redirectVm = new PostRedirectViewModel()
+            {
+                AspController = "Home",
+                AspAction = "RecoverySeedBackup",
+                Parameters =
+                {
+                    new KeyValuePair<string, string>("cryptoCode", vm.CryptoCode),
+                    new KeyValuePair<string, string>("mnemonic", vm.Mnemonic),
+                    new KeyValuePair<string, string>("passphrase", vm.Passphrase),
+                    new KeyValuePair<string, string>("isStored", vm.IsStored ? "true" : "false"),
+                    new KeyValuePair<string, string>("requireConfirm", vm.RequireConfirm ? "true" : "false"),
+                    new KeyValuePair<string, string>("returnUrl", vm.ReturnUrl)
+                }
+            };
+            return controller.View("PostRedirect", redirectVm);
         }
-        
-        public static string TrimEnd(this string input, string suffixToRemove,
-            StringComparison comparisonType) {
 
-            if (input != null && suffixToRemove != null
-                              && input.EndsWith(suffixToRemove, comparisonType)) {
-                return input.Substring(0, input.Length - suffixToRemove.Length);
-            }
-            else return input;
+        public static string ToSql<TEntity>(this IQueryable<TEntity> query) where TEntity : class
+        {
+            var enumerator = query.Provider.Execute<IEnumerable<TEntity>>(query.Expression).GetEnumerator();
+            var relationalCommandCache = enumerator.Private("_relationalCommandCache");
+            var selectExpression = relationalCommandCache.Private<Microsoft.EntityFrameworkCore.Query.SqlExpressions.SelectExpression>("_selectExpression");
+            var factory = relationalCommandCache.Private<Microsoft.EntityFrameworkCore.Query.IQuerySqlGeneratorFactory>("_querySqlGeneratorFactory");
+
+            var sqlGenerator = factory.Create();
+            var command = sqlGenerator.GetCommand(selectExpression);
+
+            string sql = command.CommandText;
+            return sql;
         }
+        private static object Private(this object obj, string privateField) => obj?.GetType().GetField(privateField, BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(obj);
+        private static T Private<T>(this object obj, string privateField) => (T)obj?.GetType().GetField(privateField, BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(obj);
     }
 }

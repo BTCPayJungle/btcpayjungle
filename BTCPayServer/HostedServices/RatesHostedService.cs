@@ -1,17 +1,13 @@
-﻿using System;
-using NBitcoin;
-using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using BTCPayServer.Logging;
 using BTCPayServer.Services;
 using BTCPayServer.Services.Rates;
-using Microsoft.Extensions.Hosting;
-using BTCPayServer.Logging;
-using System.Runtime.CompilerServices;
-using System.IO;
-using System.Text;
+using Microsoft.Extensions.Logging;
+using NBitcoin;
 using Newtonsoft.Json;
 
 namespace BTCPayServer.HostedServices
@@ -28,8 +24,8 @@ namespace BTCPayServer.HostedServices
                 return "";
             }
         }
-        private SettingsRepository _SettingsRepository;
-        RateProviderFactory _RateProviderFactory;
+        private readonly SettingsRepository _SettingsRepository;
+        readonly RateProviderFactory _RateProviderFactory;
         public RatesHostedService(SettingsRepository repo,
                                   RateProviderFactory rateProviderFactory)
         {

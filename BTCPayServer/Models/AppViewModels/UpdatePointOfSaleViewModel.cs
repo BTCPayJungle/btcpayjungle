@@ -1,5 +1,6 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using BTCPayServer.Services.Apps;
 using BTCPayServer.Validation;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
@@ -16,8 +17,8 @@ namespace BTCPayServer.Models.AppViewModels
         public string Currency { get; set; }
         public string Template { get; set; }
 
-        [Display(Name = "Enable shopping cart")]
-        public bool EnableShoppingCart { get; set; }
+        [Display(Name = "Default view")]
+        public PosViewType DefaultView { get; set; }
         [Display(Name = "User can input custom amount")]
         public bool ShowCustomAmount { get; set; }
         [Display(Name = "User can input discount in %")]
@@ -28,10 +29,13 @@ namespace BTCPayServer.Models.AppViewModels
         public string Example2 { get; internal set; }
         public string ExampleCallback { get; internal set; }
         public string InvoiceUrl { get; internal set; }
-        
-        [Display(Name = "Callback Notification Url")] 
+
+        [Display(Name = "Callback Notification Url")]
         [Uri]
         public string NotificationUrl { get; set; }
+        [Display(Name = "Redirect Url")]
+        [Uri]
+        public string RedirectUrl { get; set; }
 
         [Required]
         [MaxLength(30)]
@@ -62,7 +66,7 @@ namespace BTCPayServer.Models.AppViewModels
         public string SearchTerm { get; set; }
 
         public SelectList RedirectAutomaticallySelectList =>
-            new SelectList(new List< SelectListItem>()
+            new SelectList(new List<SelectListItem>()
             {
                 new SelectListItem()
                 {

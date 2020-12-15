@@ -6,80 +6,57 @@
     
     <partial name="AddDerivationSchemes_NBXWalletGenerate" model="@(new GenerateWalletRequest())"/>
 }
-<div class="modal fade" id="ledgerimport" tabindex="-1" role="dialog" aria-labelledby="ledgerimport" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <div class="modal-content" form method="post">
+<partial name="CameraScanner"/>
+<form id="qr-import-form" method="post">
+    <input type="hidden" asp-for="WalletFileContent"/>
+</form>
+<div class="modal fade" id="electrumimport" tabindex="-1" role="dialog" aria-labelledby="electrumimport" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <form class="modal-content" method="post" enctype="multipart/form-data">
             <div class="modal-header">
-                <h5 class="modal-title" id="exampleModalLabel">Import Ledger Wallet</h5>
+                <h5 class="modal-title" id="electrumimportLabel">Import Wallet from file</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
                     <span aria-hidden="true">&times;</span>
                 </button>
             </div>
             <div class="modal-body">
-                <div id="ledger-loading">
-                    Checking if a ledger wallet is connected...
-                </div>
-                <div id="ledger-validate" style="display: none;">
-                    Retrieving, wallet information... you may need to confirm access on your screen.
-                </div>
-                <p id="no-ledger-info" style="display: none;">
-                    No ledger wallet detected. If you own one, use chrome, open the app, and refresh this page.
-                </p>
-                <div id="no-ledger-info" class="display-when-ledger-connected">
-                    <p>
-                        A ledger wallet is detected, which account do you want to use? No need to paste manually
-                        xpub if your ledger device was detected. Just select derivation scheme from the list
-                        bellow and xpub will automatically populate.
-                    </p>
-
-                    <p>
-                        <a href="https://docs.btcpayserver.org/getting-started/connectwallet/ledgerwallet#manual-setup"
-                           title="Open Ledger wallet manual setup docs"
-                           target="_blank"
-                           rel="noopener noreferrer">
-                            Can't find your account in the select?
-                        </a>
-                    </p>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-
-                <div class="dropdown display-when-ledger-connected">
-                    <button class="btn btn-primary dropdown-toggle" type="button" id="ledgerAccountsDropdownMenuButton" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                        Select ledger wallet account
-                    </button>
-                    <div class="dropdown-menu overflow-auto" style="max-height: 200px;" aria-labelledby="ledgerAccountsDropdownMenuButton">
-                        @for (var i = 0; i < 20; i++)
-                        {
-                            <a class="dropdown-item ledger-info-recommended" data-ledgerkeypath="@Model.RootKeyPath.Derive(i, true)" href="#">Account @i (<span>@Model.RootKeyPath.Derive(i, true)</span>)</a>
-                        }
-                    </div>
-                </div>
-            </div>
-
-        </div>
-    </div>
-</div>
-<div class="modal fade" id="coldcardimport" tabindex="-1" role="dialog" aria-labelledby="coldcardimport" aria-hidden="true">
-    <div class="modal-dialog" role="document">
-        <form class="modal-content" form method="post" enctype="multipart/form-data">
-            <div class="modal-header">
-                <h5 class="modal-title" id="coldcardimportLabel">Import Coldcard Wallet</h5>
-                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                    <span aria-hidden="true">&times;</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <p>You may import your Coldcard wallet by exporting the public details from <kbd>Advanced->MicroSD Card->Electrum Wallet</kbd> and uploading it here.</p>
+                <p>Import your air-gapped hardware wallet by exporting a file and uploading it here.</p>
+                <table class="table table-sm table-responsive-md">
+                    <thead>
+                        <tr>
+                            <th>Wallet</th>
+                            <th>Instructions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Cobo Vault</td>
+                            <td><kbd>Settings ❯ Watch-Only Wallet ❯ BTCPay ❯ Export Wallet</kbd></td>
+                        </tr>
+                        <tr>
+                            <td>ColdCard</td>
+                            <td>
+                                <kbd>Advanced ❯ MicroSD Card ❯ Electrum Wallet</kbd> or
+                                <kbd>Advanced ❯ MicroSD Card ❯ Wasabi Wallet</kbd>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>Electrum</td>
+                            <td><kbd>File ❯ Save backup</kbd></td>
+                        </tr>
+                        <tr>
+                            <td>Wasabi</td>
+                            <td><kbd>Tools ❯ Wallet Manager ❯ Open Wallets Folder</kbd></td>
+                        </tr>
+                    </tbody>
+                </table>
                 <div class="form-group">
-                    <label asp-for="ColdcardPublicFile"></label>
-
-                    <input type="file" class="form-control-file" asp-for="ColdcardPublicFile" required>
+                    <label asp-for="WalletFile"></label>
+                    <input type="file" class="form-control-file" asp-for="WalletFile" required>
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
                 <button type="submit" class="btn btn-primary">Submit</button>
             </div>
         </form>
@@ -88,7 +65,7 @@
 
 <template id="btcpayservervault_template">
     <div class="modal-dialog" role="document">
-        <form class="modal-content" form method="post" enctype="multipart/form-data">
+        <form class="modal-content" method="post" enctype="multipart/form-data">
             <div class="modal-header">
                 <h5 class="modal-title" id="exampleModalLabel">Import from BTCPayServer Vault</h5>
                 <button type="button" class="close" data-dismiss="modal" aria-label="Close">
@@ -121,8 +98,9 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                <button class="btn btn-primary vault-retry" style="display:none;" type="button">Retry</button>
                 <button id="vault-confirm" class="btn btn-primary" style="display:none;"></button>
+                <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancel</button>
             </div>
         </form>
     </div>

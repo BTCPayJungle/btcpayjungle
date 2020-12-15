@@ -1,16 +1,16 @@
-﻿using BTCPayServer.Data;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using BTCPayServer.Abstractions.Contracts;
+using BTCPayServer.Data;
 using BTCPayServer.Events;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 
 namespace BTCPayServer.Services
 {
-    public class SettingsRepository
+    public class SettingsRepository : ISettingsRepository
     {
-        private ApplicationDbContextFactory _ContextFactory;
+        private readonly ApplicationDbContextFactory _ContextFactory;
         private readonly EventAggregator _EventAggregator;
 
         public SettingsRepository(ApplicationDbContextFactory contextFactory, EventAggregator eventAggregator)
@@ -67,7 +67,7 @@ namespace BTCPayServer.Services
         {
             return JsonConvert.SerializeObject(obj);
         }
-        
+
         public async Task<T> WaitSettingsChanged<T>(CancellationToken cancellationToken = default)
         {
             return (await _EventAggregator.WaitNext<SettingsChanged<T>>(cancellationToken)).Settings;

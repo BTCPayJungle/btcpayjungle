@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 
 namespace BTCPayServer.Controllers
@@ -12,16 +9,20 @@ namespace BTCPayServer.Controllers
     {
         public IActionResult Handle(int? statusCode = null)
         {
-            if (statusCode.HasValue)
+            if (Request.Headers.TryGetValue("Accept", out var v) && v.Any(v => v.Contains("text/html", StringComparison.OrdinalIgnoreCase)))
             {
-                var specialPages = new[] { 404, 429, 500 };
-                if (specialPages.Any(a => a == statusCode.Value))
+                if (statusCode.HasValue)
                 {
-                    var viewName = statusCode.ToString();
-                    return View(viewName);
+                    var specialPages = new[] { 404, 429, 500 };
+                    if (specialPages.Any(a => a == statusCode.Value))
+                    {
+                        var viewName = statusCode.ToString();
+                        return View(viewName);
+                    }
                 }
+                return View(statusCode);
             }
-            return View(statusCode);
+            return this.StatusCode(statusCode.Value);
         }
     }
 }

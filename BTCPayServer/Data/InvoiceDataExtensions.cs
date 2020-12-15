@@ -1,13 +1,27 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using BTCPayServer.Services.Invoices;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
 
 namespace BTCPayServer.Data
 {
     public static class InvoiceDataExtensions
     {
+        public static InvoiceEntity GetBlob(this Data.InvoiceData invoiceData, BTCPayNetworkProvider networks)
+        {
+            var entity = NBitcoin.JsonConverters.Serializer.ToObject<InvoiceEntity>(ZipUtils.Unzip(invoiceData.Blob), null);
+            entity.Networks = networks;
+            if (entity.Metadata is null)
+            {
+                if (entity.Version < InvoiceEntity.GreenfieldInvoices_Version)
+                {
+                    entity.MigrateLegacyInvoice();
+                }
+                else
+                {
+                    entity.Metadata = new InvoiceMetadata();
+                }
+            }
+            return entity;
+        }
         public static InvoiceState GetInvoiceState(this InvoiceData invoiceData)
         {
             return new InvoiceState(invoiceData.Status, invoiceData.ExceptionStatus);

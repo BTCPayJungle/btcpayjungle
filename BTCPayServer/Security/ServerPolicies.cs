@@ -1,4 +1,4 @@
-﻿using BTCPayServer.Client;
+using BTCPayServer.Client;
 using Microsoft.AspNetCore.Authorization;
 
 namespace BTCPayServer.Security
@@ -11,6 +11,7 @@ namespace BTCPayServer.Security
             {
                 options.AddPolicy(p);
             }
+            options.AddPolicy(Policies.CanModifyStoreSettingsUnscoped);
             options.AddPolicy(CanGetRates.Key);
             return options;
         }

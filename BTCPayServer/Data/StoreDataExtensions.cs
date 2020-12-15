@@ -1,15 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Claims;
 using System.Text;
-using System.Threading.Tasks;
 using BTCPayServer.Payments;
-using BTCPayServer.Security;
 using BTCPayServer.Services.Rates;
-using NBitcoin;
 using NBXplorer;
-using NBXplorer.DerivationStrategy;
 using Newtonsoft.Json.Linq;
 
 namespace BTCPayServer.Data
@@ -20,8 +15,7 @@ namespace BTCPayServer.Data
         public static PaymentMethodId GetDefaultPaymentId(this StoreData storeData, BTCPayNetworkProvider networks)
         {
             PaymentMethodId[] paymentMethodIds = storeData.GetEnabledPaymentIds(networks);
-
-            var defaultPaymentId = string.IsNullOrEmpty(storeData.DefaultCrypto) ? null : PaymentMethodId.Parse(storeData.DefaultCrypto);
+            PaymentMethodId.TryParse(storeData.DefaultCrypto, out var defaultPaymentId);
             var chosen = paymentMethodIds.FirstOrDefault(f => f == defaultPaymentId) ??
                          paymentMethodIds.FirstOrDefault(f => f.CryptoCode == defaultPaymentId?.CryptoCode) ??
                          paymentMethodIds.FirstOrDefault();
@@ -46,13 +40,56 @@ namespace BTCPayServer.Data
         }
 #pragma warning restore CS0618
 
-        
+
         public static StoreBlob GetStoreBlob(this StoreData storeData)
         {
             var result = storeData.StoreBlob == null ? new StoreBlob() : new Serializer(null).ToObject<StoreBlob>(Encoding.UTF8.GetString(storeData.StoreBlob));
             if (result.PreferredExchange == null)
                 result.PreferredExchange = CoinGeckoRateProvider.CoinGeckoName;
+
+            if (result.Hints == null)
+                result.Hints = new StoreBlob.StoreHints();
             return result;
+        }
+
+        public static List<PaymentMethodCriteria> GetPaymentMethodCriteria(this StoreData storeData, BTCPayNetworkProvider networkProvider,StoreBlob storeBlob = null)
+        {
+#pragma warning disable 612
+            storeBlob ??= storeData.GetStoreBlob();
+
+            return storeData.GetEnabledPaymentIds(networkProvider).Select(paymentMethodId=>
+            {
+                var matchedFromBlob =
+#pragma warning disable CS0618 // Type or member is obsolete
+                    storeBlob.PaymentMethodCriteria?.SingleOrDefault(criteria => criteria.PaymentMethod == paymentMethodId && criteria.Value != null);
+#pragma warning restore CS0618 // Type or member is obsolete
+                if (matchedFromBlob is null && paymentMethodId.PaymentType == LightningPaymentType.Instance && storeBlob.LightningMaxValue != null)
+                {
+                    return new PaymentMethodCriteria()
+                    {
+                        Above = false,
+                        PaymentMethod = paymentMethodId,
+                        Value = storeBlob.LightningMaxValue
+                    };
+                }
+                if (matchedFromBlob is null && paymentMethodId.PaymentType == BitcoinPaymentType.Instance && storeBlob.OnChainMinValue != null)
+                {
+                    return new PaymentMethodCriteria()
+                    {
+                        Above = true,
+                        PaymentMethod = paymentMethodId,
+                        Value = storeBlob.OnChainMinValue
+                    };
+                }
+
+                return new PaymentMethodCriteria()
+                {
+                    PaymentMethod = paymentMethodId,
+                    Above = matchedFromBlob?.Above??true,
+                    Value = matchedFromBlob?.Value
+                };
+            }).ToList();
+#pragma warning restore 612
         }
 
         public static bool SetStoreBlob(this StoreData storeData, StoreBlob storeBlob)
@@ -69,7 +106,6 @@ namespace BTCPayServer.Data
         {
             if (storeData == null)
                 throw new ArgumentNullException(nameof(storeData));
-            networks = networks.UnfilteredNetworks;
 #pragma warning disable CS0618
             bool btcReturned = false;
 
@@ -86,7 +122,10 @@ namespace BTCPayServer.Data
                 JObject strategies = JObject.Parse(storeData.DerivationStrategies);
                 foreach (var strat in strategies.Properties())
                 {
-                    var paymentMethodId = PaymentMethodId.Parse(strat.Name);
+                    if (!PaymentMethodId.TryParse(strat.Name, out var paymentMethodId))
+                    {
+                        continue;
+                    }
                     var network = networks.GetNetwork<BTCPayNetworkBase>(paymentMethodId.CryptoCode);
                     if (network != null)
                     {

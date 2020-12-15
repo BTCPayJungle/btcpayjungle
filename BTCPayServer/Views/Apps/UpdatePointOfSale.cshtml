@@ -1,28 +1,10 @@
-﻿@addTagHelper *, BundlerMinifier.TagHelpers
+﻿@using BTCPayServer.Services.Apps
+@addTagHelper *, BundlerMinifier.TagHelpers
 @model UpdatePointOfSaleViewModel
 @{
     ViewData["Title"] = "Update Point of Sale";
 }
 <section>
-    <div class="modal" id="product-modal" tabindex="-1" role="dialog">
-        <div class="modal-dialog" role="document">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Product management</h5>
-                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-                        <span aria-hidden="true">&times;</span>
-                    </button>
-                </div>
-                <div class="modal-body">
-                    <p>Modal body text goes here.</p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-                    <button type="button" class="js-product-save btn btn-primary">Save Changes</button>
-                </div>
-            </div>
-        </div>
-    </div>
     <div class="container">
         <div class="row">
             <div class="col-lg-12 section-heading">
@@ -54,10 +36,10 @@
                         <span asp-validation-for="Currency" class="text-danger"></span>
                     </div>
                     <div class="form-group">
-                        <div class="form-check">
-                            <input asp-for="EnableShoppingCart" type="checkbox" class="form-check-input" />
-                            <label asp-for="EnableShoppingCart" class="form-check-label"></label>
-                            <span asp-validation-for="EnableShoppingCart" class="text-danger"></span>
+                        <div class="form-group">
+                            <label asp-for="DefaultView" class="control-label"></label>*
+                            <select asp-for="DefaultView" asp-items="@Html.GetEnumSelectList<PosViewType>()" class="form-control"></select>
+                            <span asp-validation-for="DefaultView" class="text-danger"></span>
                         </div>
                         <div class="form-check">
                             <input asp-for="ShowCustomAmount" type="checkbox" class="form-check-input" />
@@ -97,18 +79,11 @@
                     </div>
                     <div class="form-group">
                         <label asp-for="CustomCSSLink" class="control-label"></label>
-                        <a href="https://docs.btcpayserver.org/development/theme#bootstrap-themes" target="_blank"><span class="fa fa-question-circle-o" title="More information..."></span></a>
+                        <a href="https://docs.btcpayserver.org/Theme/#2-bootstrap-themes" target="_blank"><span class="fa fa-question-circle-o" title="More information..."></span></a>
                         <input asp-for="CustomCSSLink" class="form-control" />
                         <span asp-validation-for="CustomCSSLink" class="text-danger"></span>
                     </div>
-                    <div class="form-group">
-                        <label class="control-label">Products</label>*
-                        <div class="mb-3">
-                            <a class="js-product-add btn btn-secondary" href="#" data-toggle="modal" data-target="#product-modal"><i class="fa fa-plus fa-fw"></i> Add Product</a>
-                        </div>
-                        <div class="js-products bg-light row p-3">
-                        </div>
-                    </div>
+                    <partial name="TemplateEditor" model="@(nameof(Model.Template), "Products")" />
                     <div class="form-group">
                         <label asp-for="Template" class="control-label"></label>*
                         <textarea asp-for="Template" rows="10" cols="40" class="js-product-template form-control"></textarea>
@@ -118,6 +93,11 @@
                         <label asp-for="NotificationUrl" class="control-label"></label>
                         <input asp-for="NotificationUrl" class="form-control" />
                         <span asp-validation-for="NotificationUrl" class="text-danger"></span>
+                    </div>
+                    <div class="form-group">
+                        <label asp-for="RedirectUrl" class="control-label"></label>
+                        <input asp-for="RedirectUrl" class="form-control" />
+                        <span asp-validation-for="RedirectUrl" class="text-danger"></span>
                     </div>
                     <div class="form-group">
                         <label asp-for="RedirectAutomatically" class="control-label"></label>*
@@ -146,7 +126,10 @@
                             <a class="btn btn-outline-primary" asp-action="ViewPointOfSale" asp-controller="AppsPublic" asp-route-appId="@Model.Id"
                                target="viewapp_@Model.Id"><span class="fa fa-external-link"></span></a>
                         </div>
-                        <a class="btn btn-outline-primary" target="_blank" asp-action="ListApps">Back to the app list</a>
+                        <div class="btn-group">
+                            <a class="btn btn-outline-primary" asp-action="ListApps">Back to the app list</a>
+                            <a class="btn btn-outline-primary" asp-action="ListApps" target="viewapp_@Model.Id"><span class="fa fa-external-link"></span></a>
+                        </div>
                     </div>
                     <div class="form-group">
                         <div class="accordion" id="accordian-dev-info">

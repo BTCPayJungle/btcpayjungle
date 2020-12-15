@@ -1,7 +1,8 @@
-﻿using BTCPayServer.Validation;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using BTCPayServer.Data;
+using BTCPayServer.Client.Models;
+using BTCPayServer.Validation;
+using static BTCPayServer.Data.StoreBlob;
 
 namespace BTCPayServer.Models.StoreViewModels
 {
@@ -16,7 +17,7 @@ namespace BTCPayServer.Models.StoreViewModels
             public bool Enabled { get; set; }
             public bool Collapsed { get; set; }
         }
-        
+
         public class AdditionalPaymentMethod
         {
             public string Provider { get; set; }
@@ -29,6 +30,7 @@ namespace BTCPayServer.Models.StoreViewModels
         }
 
         public bool CanDelete { get; set; }
+        [Display(Name = "Store ID")]
         public string Id { get; set; }
         [Display(Name = "Store Name")]
         [Required]
@@ -56,7 +58,7 @@ namespace BTCPayServer.Models.StoreViewModels
         public List<AdditionalPaymentMethod> ThirdPartyPaymentMethods { get; set; } =
             new List<AdditionalPaymentMethod>();
 
-        [Display(Name = "Invoice expires if the full amount has not been paid after ... minutes")]
+        [Display(Name = "Invoice expires if the full amount has not been paid after …")]
         [Range(1, 60 * 24 * 24)]
         public int InvoiceExpiration
         {
@@ -64,7 +66,7 @@ namespace BTCPayServer.Models.StoreViewModels
             set;
         }
 
-        [Display(Name = "Payment invalid if transactions fails to confirm ... minutes after invoice expiration")]
+        [Display(Name = "Payment invalid if transactions fails to confirm … after invoice expiration")]
         [Range(10, 60 * 24 * 24)]
         public int MonitoringExpiration
         {
@@ -72,23 +74,26 @@ namespace BTCPayServer.Models.StoreViewModels
             set;
         }
 
-        [Display(Name = "Consider the invoice confirmed when the payment transaction...")]
+        [Display(Name = "Consider the invoice confirmed when the payment transaction …")]
         public SpeedPolicy SpeedPolicy
         {
             get; set;
         }
 
-        [Display(Name = "Add additional fee (network fee) to invoice...")]
-        public Data.NetworkFeeMode NetworkFeeMode
+        [Display(Name = "Add additional fee (network fee) to invoice …")]
+        public NetworkFeeMode NetworkFeeMode
         {
             get; set;
         }
 
         [Display(Name = "Description template of the lightning invoice")]
         public string LightningDescriptionTemplate { get; set; }
-        
+
         [Display(Name = "Enable Payjoin/P2EP")]
-        public bool  PayJoinEnabled { get; set; }
+        public bool PayJoinEnabled { get; set; }
+
+        public bool HintWallet { get; set; }
+        public bool HintLightning { get; set; }
 
         public class LightningNode
         {

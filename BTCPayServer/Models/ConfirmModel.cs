@@ -1,8 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
 namespace BTCPayServer.Models
 {
     public class ConfirmModel
@@ -24,6 +19,9 @@ namespace BTCPayServer.Models
         {
             get; set;
         }
+
+        public bool DescriptionHtml { get; set; } = false;
+
         public string Action
         {
             get; set;

@@ -1,4 +1,4 @@
-using System;
+using BTCPayServer.Abstractions.Constants;
 using BTCPayServer.Security.Bitpay;
 using Microsoft.AspNetCore.Authentication;
 
@@ -12,4 +12,4 @@ namespace BTCPayServer.Security
             return builder;
         }
     }
-} 
+}

@@ -1,3 +1,4 @@
+#if ALTCOINS
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
@@ -18,7 +19,7 @@ namespace BTCPayServer.Services.Altcoins.Monero.Services
         public ImmutableDictionary<string, JsonRpcClient> DaemonRpcClients;
         public ImmutableDictionary<string, JsonRpcClient> WalletRpcClients;
 
-        private ConcurrentDictionary<string, MoneroLikeSummary> _summaries =
+        private readonly ConcurrentDictionary<string, MoneroLikeSummary> _summaries =
             new ConcurrentDictionary<string, MoneroLikeSummary>();
 
         public ConcurrentDictionary<string, MoneroLikeSummary> Summaries => _summaries;
@@ -62,9 +63,10 @@ namespace BTCPayServer.Services.Altcoins.Monero.Services
                 var daemonResult =
                     await daemonRpcClient.SendCommandAsync<JsonRpcClient.NoRequestModel, SyncInfoResponse>("sync_info",
                         JsonRpcClient.NoRequestModel.Instance);
-                summary.TargetHeight = daemonResult.TargetHeight ?? daemonResult.Height;
-                summary.Synced = daemonResult.Height >=  summary.TargetHeight &&  (summary.TargetHeight > 0 || _btcPayServerEnvironment.IsDevelopping);
+                summary.TargetHeight = daemonResult.TargetHeight.GetValueOrDefault(0);
                 summary.CurrentHeight = daemonResult.Height;
+                summary.TargetHeight = summary.TargetHeight == 0 ? summary.CurrentHeight : summary.TargetHeight;
+                summary.Synced = daemonResult.Height >= summary.TargetHeight && summary.CurrentHeight > 0;
                 summary.UpdatedAt = DateTime.Now;
                 summary.DaemonAvailable = true;
             }
@@ -92,7 +94,7 @@ namespace BTCPayServer.Services.Altcoins.Monero.Services
             _summaries.AddOrReplace(cryptoCode, summary);
             if (changed)
             {
-                _eventAggregator.Publish(new MoneroDaemonStateChange() {Summary = summary, CryptoCode = cryptoCode});
+                _eventAggregator.Publish(new MoneroDaemonStateChange() { Summary = summary, CryptoCode = cryptoCode });
             }
 
             return summary;
@@ -117,3 +119,4 @@ namespace BTCPayServer.Services.Altcoins.Monero.Services
         }
     }
 }
+#endif

@@ -1,7 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using NBitcoin;
 using NBXplorer;
 
@@ -19,7 +15,7 @@ namespace BTCPayServer
                 BlockExplorerLink = NetworkType == NetworkType.Mainnet ? "https://chainz.cryptoid.info/ufo/tx.dws?{0}" : "https://chainz.cryptoid.info/ufo/tx.dws?{0}",
                 NBXplorerNetwork = nbxplorerNetwork,
                 UriScheme = "ufo",
-                DefaultRateRules = new[] 
+                DefaultRateRules = new[]
                 {
                                 "UFO_X = UFO_BTC * BTC_X",
                                 "UFO_BTC = coinexchange(UFO_BTC)"

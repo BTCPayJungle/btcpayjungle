@@ -1,15 +1,12 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using BTCPayServer.Data;
 using BTCPayServer.Models.AppViewModels;
 using BTCPayServer.Services.Apps;
-using BTCPayServer.Services.Mails;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace BTCPayServer.Controllers
 {
@@ -55,7 +52,7 @@ namespace BTCPayServer.Controllers
                     "  image: https://cdn.pixabay.com/photo/2016/09/16/11/24/darts-1673812__480.jpg\n" +
                     "  inventory: 5\n" +
                     "  custom: true";
-                EnableShoppingCart = false;
+                DefaultView = PosViewType.Static;
                 ShowCustomAmount = true;
                 ShowDiscount = true;
                 EnableTips = true;
@@ -64,6 +61,7 @@ namespace BTCPayServer.Controllers
             public string Currency { get; set; }
             public string Template { get; set; }
             public bool EnableShoppingCart { get; set; }
+            public PosViewType DefaultView { get; set; }
             public bool ShowCustomAmount { get; set; }
             public bool ShowDiscount { get; set; }
             public bool EnableTips { get; set; }
@@ -84,6 +82,7 @@ namespace BTCPayServer.Controllers
 
             public string Description { get; set; }
             public string NotificationUrl { get; set; }
+            public string RedirectUrl { get; set; }
             public bool? RedirectAutomatically { get; set; }
         }
 
@@ -95,13 +94,15 @@ namespace BTCPayServer.Controllers
             if (app == null)
                 return NotFound();
             var settings = app.GetSettings<PointOfSaleSettings>();
+            settings.DefaultView = settings.EnableShoppingCart ? PosViewType.Cart : settings.DefaultView;
+            settings.EnableShoppingCart = false;
 
             var vm = new UpdatePointOfSaleViewModel()
             {
                 Id = appId,
                 StoreId = app.StoreDataId,
                 Title = settings.Title,
-                EnableShoppingCart = settings.EnableShoppingCart,
+                DefaultView = settings.DefaultView,
                 ShowCustomAmount = settings.ShowCustomAmount,
                 ShowDiscount = settings.ShowDiscount,
                 EnableTips = settings.EnableTips,
@@ -115,6 +116,7 @@ namespace BTCPayServer.Controllers
                 EmbeddedCSS = settings.EmbeddedCSS,
                 Description = settings.Description,
                 NotificationUrl = settings.NotificationUrl,
+                RedirectUrl = settings.RedirectUrl,
                 SearchTerm = $"storeid:{app.StoreDataId}",
                 RedirectAutomatically = settings.RedirectAutomatically.HasValue ? settings.RedirectAutomatically.Value ? "true" : "false" : ""
             };
@@ -179,7 +181,7 @@ namespace BTCPayServer.Controllers
             app.SetSettings(new PointOfSaleSettings()
             {
                 Title = vm.Title,
-                EnableShoppingCart = vm.EnableShoppingCart,
+                DefaultView = vm.DefaultView,
                 ShowCustomAmount = vm.ShowCustomAmount,
                 ShowDiscount = vm.ShowDiscount,
                 EnableTips = vm.EnableTips,
@@ -191,10 +193,10 @@ namespace BTCPayServer.Controllers
                 CustomTipPercentages = ListSplit(vm.CustomTipPercentages),
                 CustomCSSLink = vm.CustomCSSLink,
                 NotificationUrl = vm.NotificationUrl,
+                RedirectUrl = vm.RedirectUrl,
                 Description = vm.Description,
                 EmbeddedCSS = vm.EmbeddedCSS,
                 RedirectAutomatically = string.IsNullOrEmpty(vm.RedirectAutomatically) ? (bool?)null : bool.Parse(vm.RedirectAutomatically)
-
             });
             await _AppService.UpdateOrCreateApp(app);
             TempData[WellKnownTempData.SuccessMessage] = "App updated";

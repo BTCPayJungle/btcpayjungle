@@ -1,30 +1,32 @@
-using Microsoft.Extensions.Logging;
+using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using BTCPayServer.Abstractions.Constants;
+using BTCPayServer.Client;
 using BTCPayServer.Client.Models;
 using BTCPayServer.Configuration;
 using BTCPayServer.Data;
 using BTCPayServer.Events;
+using BTCPayServer.HostedServices;
 using BTCPayServer.Logging;
 using BTCPayServer.Security;
 using BTCPayServer.Security.GreenField;
 using BTCPayServer.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.ModelBinding;
 using NicolasDorier.RateLimits;
-using BTCPayServer.Client;
 
 namespace BTCPayServer.Controllers.GreenField
 {
     [ApiController]
     [Authorize(AuthenticationSchemes = AuthenticationSchemes.Greenfield)]
+    [EnableCors(CorsPolicies.All)]
     public class UsersController : ControllerBase
     {
         private readonly UserManager<ApplicationUser> _userManager;
-        private readonly BTCPayServerOptions _btcPayServerOptions;
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly SettingsRepository _settingsRepository;
         private readonly EventAggregator _eventAggregator;
@@ -32,17 +34,19 @@ namespace BTCPayServer.Controllers.GreenField
         private readonly RateLimitService _throttleService;
         private readonly BTCPayServerOptions _options;
         private readonly IAuthorizationService _authorizationService;
+        private readonly CssThemeManager _themeManager;
 
-        public UsersController(UserManager<ApplicationUser> userManager, BTCPayServerOptions btcPayServerOptions,
-            RoleManager<IdentityRole> roleManager, SettingsRepository settingsRepository,
+        public UsersController(UserManager<ApplicationUser> userManager, 
+            RoleManager<IdentityRole> roleManager, 
+            SettingsRepository settingsRepository,
             EventAggregator eventAggregator,
             IPasswordValidator<ApplicationUser> passwordValidator,
             RateLimitService throttleService,
             BTCPayServerOptions options,
-            IAuthorizationService authorizationService)
+            IAuthorizationService authorizationService,
+            CssThemeManager themeManager)
         {
             _userManager = userManager;
-            _btcPayServerOptions = btcPayServerOptions;
             _roleManager = roleManager;
             _settingsRepository = settingsRepository;
             _eventAggregator = eventAggregator;
@@ -50,6 +54,7 @@ namespace BTCPayServer.Controllers.GreenField
             _throttleService = throttleService;
             _options = options;
             _authorizationService = authorizationService;
+            _themeManager = themeManager;
         }
 
         [Authorize(Policy = Policies.CanViewProfile, AuthenticationSchemes = AuthenticationSchemes.Greenfield)]
@@ -57,21 +62,26 @@ namespace BTCPayServer.Controllers.GreenField
         public async Task<ActionResult<ApplicationUserData>> GetCurrentUser()
         {
             var user = await _userManager.GetUserAsync(User);
-            return FromModel(user);
+            return await FromModel(user);
         }
 
         [AllowAnonymous]
         [HttpPost("~/api/v1/users")]
-        public async Task<ActionResult<ApplicationUserData>> CreateUser(CreateApplicationUserRequest request, CancellationToken cancellationToken = default)
+        public async Task<IActionResult> CreateUser(CreateApplicationUserRequest request, CancellationToken cancellationToken = default)
         {
             if (request?.Email is null)
-                return BadRequest(CreateValidationProblem(nameof(request.Email), "Email is missing"));
-            if (!Validation.EmailValidator.IsEmail(request.Email))
+                ModelState.AddModelError(nameof(request.Email), "Email is missing");
+            if (!string.IsNullOrEmpty(request?.Email) && !Validation.EmailValidator.IsEmail(request.Email))
             {
-                return BadRequest(CreateValidationProblem(nameof(request.Email), "Invalid email"));
+                ModelState.AddModelError(nameof(request.Email), "Invalid email");
             }
             if (request?.Password is null)
-                return BadRequest(CreateValidationProblem(nameof(request.Password), "Password is missing"));
+                ModelState.AddModelError(nameof(request.Password), "Password is missing");
+
+            if (!ModelState.IsValid)
+            {
+                return this.CreateValidationError(ModelState);
+            }
             var anyAdmin = (await _userManager.GetUsersInRoleAsync(Roles.ServerAdmin)).Any();
             var policies = await _settingsRepository.GetSettingAsync<PoliciesSettings>() ?? new PoliciesSettings();
             var isAuth = User.Identity.AuthenticationType == GreenFieldConstants.AuthenticationType;
@@ -92,7 +102,7 @@ namespace BTCPayServer.Controllers.GreenField
             if (request.IsAdministrator is true && !isAdmin)
                 return Forbid(AuthenticationSchemes.GreenfieldBasic);
 
-            if (!isAdmin && policies.LockSubscription)
+            if (!isAdmin && (policies.LockSubscription || _themeManager.Policies.DisableNonAdminCreateUserApi))
             {
                 // If we are not admin and subscriptions are locked, we need to check the Policies.CanCreateUser.Key permission
                 var canCreateUser = (await _authorizationService.AuthorizeAsync(User, null, new PolicyRequirement(Policies.CanCreateUser))).Succeeded;
@@ -104,7 +114,8 @@ namespace BTCPayServer.Controllers.GreenField
             {
                 UserName = request.Email,
                 Email = request.Email,
-                RequiresEmailConfirmation = policies.RequiresConfirmedEmail
+                RequiresEmailConfirmation = policies.RequiresConfirmedEmail,
+                Created = DateTimeOffset.UtcNow,
             };
             var passwordValidation = await this._passwordValidator.ValidateAsync(_userManager, user, request.Password);
             if (!passwordValidation.Succeeded)
@@ -113,7 +124,7 @@ namespace BTCPayServer.Controllers.GreenField
                 {
                     ModelState.AddModelError(nameof(request.Password), error.Description);
                 }
-                return BadRequest(new ValidationProblemDetails(ModelState));
+                return this.CreateValidationError(ModelState);
             }
             if (!isAdmin)
             {
@@ -125,9 +136,12 @@ namespace BTCPayServer.Controllers.GreenField
             {
                 foreach (var error in identityResult.Errors)
                 {
-                    ModelState.AddModelError(string.Empty, error.Description);
+                    if (error.Code == "DuplicateUserName")
+                        ModelState.AddModelError(nameof(request.Email), error.Description);
+                    else
+                        ModelState.AddModelError(string.Empty, error.Description);
                 }
-                return BadRequest(new ValidationProblemDetails(ModelState));
+                return this.CreateValidationError(ModelState);
             }
 
             if (request.IsAdministrator is true)
@@ -139,34 +153,25 @@ namespace BTCPayServer.Controllers.GreenField
                 await _userManager.AddToRoleAsync(user, Roles.ServerAdmin);
                 if (!anyAdmin)
                 {
-                    if (_options.DisableRegistration)
-                    {
-                        // automatically lock subscriptions now that we have our first admin
-                        Logs.PayServer.LogInformation("First admin created, disabling subscription (disable-registration is set to true)");
-                        policies.LockSubscription = true;
-                        await _settingsRepository.UpdateSetting(policies);
-                    }
+                    await _settingsRepository.FirstAdminRegistered(policies, _options.UpdateUrl != null, _options.DisableRegistration);
                 }
             }
-            _eventAggregator.Publish(new UserRegisteredEvent() {RequestUri = Request.GetAbsoluteRootUri(), User = user, Admin = request.IsAdministrator is true });
-            return CreatedAtAction(string.Empty, user);
+            _eventAggregator.Publish(new UserRegisteredEvent() { RequestUri = Request.GetAbsoluteRootUri(), User = user, Admin = request.IsAdministrator is true });
+            var model = await FromModel(user);
+            return CreatedAtAction(string.Empty, model);
         }
 
-        private ValidationProblemDetails CreateValidationProblem(string propertyName, string errorMessage)
+        private async Task<ApplicationUserData> FromModel(ApplicationUser data)
         {
-            var modelState = new ModelStateDictionary();
-            modelState.AddModelError(propertyName, errorMessage);
-            return new ValidationProblemDetails(modelState);
-        }
-
-        private static ApplicationUserData FromModel(ApplicationUser data)
-        {
+            var roles = (await _userManager.GetRolesAsync(data)).ToArray();
             return new ApplicationUserData()
             {
                 Id = data.Id,
                 Email = data.Email,
                 EmailConfirmed = data.EmailConfirmed,
-                RequiresEmailConfirmation = data.RequiresEmailConfirmation
+                RequiresEmailConfirmation = data.RequiresEmailConfirmation,
+                Roles = roles,
+                Created = data.Created
             };
         }
     }

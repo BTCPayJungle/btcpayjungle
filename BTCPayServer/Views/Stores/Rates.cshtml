@@ -1,4 +1,4 @@
-﻿@model BTCPayServer.Models.StoreViewModels.RatesViewModel
+@model BTCPayServer.Models.StoreViewModels.RatesViewModel
 @{
     Layout = "../Shared/_NavLayout.cshtml";
     ViewData.SetActivePageAndTitle(StoreNavPages.Rates, "Rates");
@@ -6,11 +6,15 @@
 
 <partial name="_StatusMessage" />
 
+@if (!ViewContext.ModelState.IsValid)
+{
 <div class="row">
     <div class="col-md-8">
         <div asp-validation-summary="All" class="text-danger"></div>
     </div>
 </div>
+}
+
 <div class="row">
     <div class="col-md-8">
         <form method="post">
@@ -19,7 +23,7 @@
                 <div class="form-group">
                     <h5>Scripting</h5>
                     <p>Rate script allows you to express precisely how you want to calculate rates for currency pairs.</p>
-                    <p>We are retrieving the rate of each exchange either directly, via <a href="https://www.coingecko.com/" target="_blank">CoinGecko (free)</a>.</p>
+                    <p>We are retrieving the rate of each exchange either directly, or via <a href="https://www.coingecko.com/" target="_blank">CoinGecko (free)</a>.</p>
                     <div class="accordion" id="accordion-info">
                         <div class="card">
                             <div class="card-header" id="direct-header">
@@ -69,11 +73,11 @@
                                 <tr>
                                     @if (result.Error)
                                     {
-                                        <th class="small"><span class="fa fa-times" style="color:red;"></span> @result.CurrencyPair</th>
+                                        <th class="small"><span class="text-danger fa fa-times"></span> @result.CurrencyPair</th>
                                     }
                                     else
                                     {
-                                        <th class="small"><span class="fa fa-check" style="color:green;"></span> @result.CurrencyPair</th>
+                                        <th class="small"><span class="text-success fa fa-check"></span> @result.CurrencyPair</th>
                                     }
                                     <td class="small">@result.Rule</td>
                                 </tr>
@@ -101,10 +105,10 @@
                             X_X = kraken(X_X);
                         </code>
                     </pre>
-                    <p>However, <code>kraken</code> does not support the <code>BTC_CAD</code> pair. For this reason you can add a rule mapping all <code>X_CAD</code> to <code>quadrigacx</code>, a Canadian exchange.</p>
+                    <p>However, <code>kraken</code> does not support the <code>BTC_CAD</code> pair. For this reason you can add a rule mapping all <code>X_CAD</code> to <code>ndax</code>, a Canadian exchange.</p>
                     <pre>
                     <code>
-                            X_CAD = quadrigacx(X_CAD);
+                            X_CAD = ndax(X_CAD);
                             X_X = kraken(X_X);
                         </code>
                     </pre>
@@ -116,19 +120,19 @@
                     <pre>
                     <code>
                             DOGE_X = bittrex(DOGE_BTC) * BTC_X
-                            X_CAD = quadrigacx(X_CAD);
+                            X_CAD = ndax(X_CAD);
                             X_X = kraken(X_X);
                         </code>
                     </pre>
                     <p>
-                        With <code>DOGE_USD</code> will be expanded to <code>bittrex(DOGE_BTC) * kraken(BTC_USD)</code>. And <code>DOGE_CAD</code> will be expanded to <code>bittrex(DOGE_BTC) * quadrigacx(BTC_CAD)</code>. <br />
+                        With <code>DOGE_USD</code> will be expanded to <code>bittrex(DOGE_BTC) * kraken(BTC_USD)</code>. And <code>DOGE_CAD</code> will be expanded to <code>bittrex(DOGE_BTC) * ndax(BTC_CAD)</code>. <br />
                         However, we advise you to write it that way to increase coverage so that <code>DOGE_BTC</code> is also supported:
                     </p>
                     <pre>
                     <code>
                             DOGE_X = DOGE_BTC * BTC_X
                             DOGE_BTC = bittrex(DOGE_BTC)
-                            X_CAD = quadrigacx(X_CAD);
+                            X_CAD = ndax(X_CAD);
                             X_X = kraken(X_X);
                         </code>
                     </pre>
@@ -155,7 +159,7 @@
                     <select asp-for="PreferredExchange" asp-items="Model.Exchanges" class="form-control"></select>
                     <span asp-validation-for="PreferredExchange" class="text-danger"></span>
                     <p id="PreferredExchangeHelpBlock" class="form-text text-muted">
-                        Current price source is <a href="@Model.RateSource" target="_blank">@Model.PreferredExchange</a>.
+                        Current Rates source is <a href="@Model.RateSource" target="_blank">@Model.PreferredExchange</a>.
                     </p>
                 </div>
                 <div class="form-group">

@@ -153,6 +153,11 @@
         <div class="col-lg-5">
             <h4>Preview</h4>
             <div id="preview"></div>
+            <div v-show="!srvModel.appIdEndpoint">
+                <h4 class="mt-2">Link</h4>
+                <span>Alternatively, you can share this link or encode it in a QR code</span>
+                <div id="preview-link"></div>
+            </div>
         </div>
     </div>
     <hr />
@@ -371,6 +376,11 @@
             border-radius: 5px;
             line-height: 35px;
             background: #fff;
+        }
+        #btcpay-input-price::-webkit-outer-spin-button,
+        #btcpay-input-price::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
         }
     </style>
 </script>

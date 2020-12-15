@@ -1,44 +1,32 @@
-﻿using BTCPayServer.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
+using System;
+using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Net.Http;
+using System.Security.Claims;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using BTCPayServer.Configuration;
 using BTCPayServer.HostedServices;
 using BTCPayServer.Hosting;
-using BTCPayServer.Payments;
-using BTCPayServer.Payments.Lightning;
 using BTCPayServer.Rating;
-using BTCPayServer.Security;
+using BTCPayServer.Services;
 using BTCPayServer.Services.Invoices;
 using BTCPayServer.Services.Rates;
 using BTCPayServer.Services.Stores;
 using BTCPayServer.Tests.Logging;
 using BTCPayServer.Tests.Mocks;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Controllers;
-using Microsoft.AspNetCore.Mvc.Routing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBXplorer;
-using NBXplorer.DerivationStrategy;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
-using System.Net;
-using System.Net.Sockets;
-using System.Runtime.CompilerServices;
-using System.Security.Claims;
-using System.Security.Principal;
-using System.Text;
-using System.Threading;
-using Xunit;
-using BTCPayServer.Services;
-using System.Net.Http;
-using Microsoft.AspNetCore.Hosting.Server.Features;
-using System.Threading.Tasks;
-using AuthenticationSchemes = BTCPayServer.Security.AuthenticationSchemes;
+using AuthenticationSchemes = BTCPayServer.Abstractions.Constants.AuthenticationSchemes;
 
 namespace BTCPayServer.Tests
 {
@@ -50,7 +38,7 @@ namespace BTCPayServer.Tests
 
     public class BTCPayServerTester : IDisposable
     {
-        private string _Directory;
+        private readonly string _Directory;
 
         public BTCPayServerTester(string scope)
         {
@@ -95,7 +83,7 @@ namespace BTCPayServer.Tests
         public bool MockRates { get; set; } = true;
         public string SocksEndpoint { get; set; }
 
-        public HashSet<string> Chains { get; set; } = new HashSet<string>(){"BTC"};
+        public HashSet<string> Chains { get; set; } = new HashSet<string>() { "BTC" };
         public bool UseLightning { get; set; }
         public bool AllowAdminRegistration { get; set; } = true;
         public bool DisableRegistration { get; set; } = false;
@@ -142,7 +130,7 @@ namespace BTCPayServer.Tests
             }
             if (AllowAdminRegistration)
                 config.AppendLine("allow-admin-registration=1");
-           
+
             config.AppendLine($"torrcfile={TestUtils.GetTestDataFullPath("Tor/torrc")}");
             config.AppendLine($"socksendpoint={SocksEndpoint}");
             config.AppendLine($"debuglog=debug.log");
@@ -207,7 +195,7 @@ namespace BTCPayServer.Tests
                 var rateProvider = (RateProviderFactory)_Host.Services.GetService(typeof(RateProviderFactory));
                 rateProvider.Providers.Clear();
 
-                var coinAverageMock = new MockRateProvider();
+                coinAverageMock = new MockRateProvider();
                 coinAverageMock.ExchangeRates.Add(new PairRate(CurrencyPair.Parse("BTC_USD"), new BidAsk(5000m)));
                 coinAverageMock.ExchangeRates.Add(new PairRate(CurrencyPair.Parse("BTC_CAD"), new BidAsk(4500m)));
                 coinAverageMock.ExchangeRates.Add(new PairRate(CurrencyPair.Parse("BTC_LTC"), new BidAsk(162m)));
@@ -218,22 +206,25 @@ namespace BTCPayServer.Tests
                 bitflyerMock.ExchangeRates.Add(new PairRate(CurrencyPair.Parse("BTC_JPY"), new BidAsk(700000m)));
                 rateProvider.Providers.Add("bitflyer", bitflyerMock);
 
-                var quadrigacx = new MockRateProvider();
-                quadrigacx.ExchangeRates.Add(new PairRate(CurrencyPair.Parse("BTC_CAD"), new BidAsk(6000m)));
-                rateProvider.Providers.Add("quadrigacx", quadrigacx);
+                var ndax = new MockRateProvider();
+                ndax.ExchangeRates.Add(new PairRate(CurrencyPair.Parse("BTC_CAD"), new BidAsk(6000m)));
+                rateProvider.Providers.Add("ndax", ndax);
 
                 var bittrex = new MockRateProvider();
                 bittrex.ExchangeRates.Add(new PairRate(CurrencyPair.Parse("DOGE_BTC"), new BidAsk(0.004m)));
                 rateProvider.Providers.Add("bittrex", bittrex);
-                
-                
+
+
                 var bitfinex = new MockRateProvider();
                 bitfinex.ExchangeRates.Add(new PairRate(CurrencyPair.Parse("UST_BTC"), new BidAsk(0.000136m)));
                 rateProvider.Providers.Add("bitfinex", bitfinex);
-                
+
                 var bitpay = new MockRateProvider();
                 bitpay.ExchangeRates.Add(new PairRate(CurrencyPair.Parse("ETB_BTC"), new BidAsk(0.1m)));
                 rateProvider.Providers.Add("bitpay", bitpay);
+                var kraken = new MockRateProvider();
+                kraken.ExchangeRates.Add(new PairRate(CurrencyPair.Parse("ETH_BTC"), new BidAsk(0.1m)));
+                rateProvider.Providers.Add("kraken", kraken);
             }
 
 
@@ -241,7 +232,7 @@ namespace BTCPayServer.Tests
             await WaitSiteIsOperational();
             Logs.Tester.LogInformation("Site is now operational");
         }
-
+        MockRateProvider coinAverageMock;
         private async Task WaitSiteIsOperational()
         {
             _ = HttpClient.GetAsync("/").ConfigureAwait(false);
@@ -330,6 +321,13 @@ namespace BTCPayServer.Tests
         {
             if (_Host != null)
                 _Host.Dispose();
+        }
+
+        public void ChangeRate(string pair, BidAsk bidAsk)
+        {
+            var p = CurrencyPair.Parse(pair);
+            var index = coinAverageMock.ExchangeRates.FindIndex(o => o.CurrencyPair == p);
+            coinAverageMock.ExchangeRates[index] = new PairRate(p, bidAsk);
         }
     }
 }

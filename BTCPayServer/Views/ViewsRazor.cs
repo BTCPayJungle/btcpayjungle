@@ -1,8 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.Globalization;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 
@@ -21,6 +18,10 @@ namespace BTCPayServer.Views
         public static string IsActivePage<T>(this ViewDataDictionary viewData, T page)
             where T : IConvertible
         {
+            if (!viewData.ContainsKey(ACTIVE_PAGE_KEY))
+            {
+                return null;
+            }
             var activePage = (T)viewData[ACTIVE_PAGE_KEY];
             return page.Equals(activePage) ? "active" : null;
         }

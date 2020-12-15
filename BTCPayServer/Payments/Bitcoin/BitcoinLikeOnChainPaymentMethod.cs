@@ -1,11 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+using System;
 using System.Linq;
-using System.Threading.Tasks;
-using BTCPayServer.Services.Invoices;
-using BTCPayServer.Services.Wallets;
+using BTCPayServer.Client.Models;
 using NBitcoin;
-using NBXplorer.JsonConverters;
 using Newtonsoft.Json;
 
 namespace BTCPayServer.Payments.Bitcoin
@@ -29,14 +25,15 @@ namespace BTCPayServer.Payments.Bitcoin
             return FeeRate.SatoshiPerByte;
         }
 
-        public void SetPaymentDestination(string newPaymentDestination)
+        public void SetPaymentDetails(IPaymentMethodDetails newPaymentMethodDetails)
         {
-            DepositAddress = newPaymentDestination;
+            DepositAddress = newPaymentMethodDetails.GetPaymentDestination();
+            KeyPath = (newPaymentMethodDetails as BitcoinLikeOnChainPaymentMethod)?.KeyPath;
         }
-        public Data.NetworkFeeMode NetworkFeeMode { get; set; }
+        public NetworkFeeMode NetworkFeeMode { get; set; }
 
         FeeRate _NetworkFeeRate;
-        [JsonConverter(typeof(FeeRateJsonConverter))]
+        [JsonConverter(typeof(NBitcoin.JsonConverters.FeeRateJsonConverter))]
         public FeeRate NetworkFeeRate
         {
             get
@@ -56,7 +53,9 @@ namespace BTCPayServer.Payments.Bitcoin
         [JsonIgnore]
         public Money NextNetworkFee { get; set; }
         [JsonIgnore]
-        public String DepositAddress { get; set; }
+        public String DepositAddress { get; set; }        
+        [JsonConverter(typeof(NBitcoin.JsonConverters.KeyPathJsonConverter))]
+        public KeyPath KeyPath { get; set; }
 
         public BitcoinAddress GetDepositAddress(Network network)
         {

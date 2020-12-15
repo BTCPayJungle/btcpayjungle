@@ -4,9 +4,6 @@
 using System;
 using System.IO;
 using System.Text;
-using System.Collections;
-using System.Collections.Generic;
-using Newtonsoft.Json;
 
 
 namespace Microsoft.Extensions.Logging.Console.Internal
@@ -128,7 +125,7 @@ namespace Microsoft.Extensions.Logging.Console.Internal
         }
     }
 
-	internal class AnsiSystemConsole : IAnsiSystemConsole
+    internal class AnsiSystemConsole : IAnsiSystemConsole
     {
         private readonly TextWriter _textWriter;
 
@@ -151,13 +148,13 @@ namespace Microsoft.Extensions.Logging.Console
     {
         void Write(string message);
     }
-	public interface IConsole
+    public interface IConsole
     {
         void Write(string message, ConsoleColor? background, ConsoleColor? foreground);
         void WriteLine(string message, ConsoleColor? background, ConsoleColor? foreground);
         void Flush();
     }
-	internal class WindowsLogConsole : IConsole
+    internal class WindowsLogConsole : IConsole
     {
         private readonly TextWriter _textWriter;
 

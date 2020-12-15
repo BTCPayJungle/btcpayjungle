@@ -1,20 +1,23 @@
-using System.Threading.Tasks;
 using System.Linq;
+using System.Threading.Tasks;
+using BTCPayServer.Abstractions.Constants;
 using BTCPayServer.Client;
 using BTCPayServer.Client.Models;
 using BTCPayServer.Data;
 using BTCPayServer.Security;
+using BTCPayServer.Security.GreenField;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using BTCPayServer.Security.GreenField;
-using NBitcoin.DataEncoders;
 using NBitcoin;
+using NBitcoin.DataEncoders;
 
 namespace BTCPayServer.Controllers.GreenField
 {
     [ApiController]
     [Authorize(AuthenticationSchemes = AuthenticationSchemes.GreenfieldAPIKeys)]
+    [EnableCors(CorsPolicies.All)]
     public class ApiKeysController : ControllerBase
     {
         private readonly APIKeyRepository _apiKeyRepository;
@@ -25,7 +28,7 @@ namespace BTCPayServer.Controllers.GreenField
             _apiKeyRepository = apiKeyRepository;
             _userManager = userManager;
         }
-    
+
         [HttpGet("~/api/v1/api-keys/current")]
         public async Task<ActionResult<ApiKeyData>> GetKey()
         {
@@ -39,10 +42,11 @@ namespace BTCPayServer.Controllers.GreenField
 
         [HttpPost("~/api/v1/api-keys")]
         [Authorize(Policy = Policies.Unrestricted, AuthenticationSchemes = AuthenticationSchemes.Greenfield)]
-        public async Task<ActionResult<ApiKeyData>> CreateKey(CreateApiKeyRequest request)
+        public async Task<IActionResult> CreateKey(CreateApiKeyRequest request)
         {
             if (request is null)
-                return BadRequest();
+                return NotFound();
+            request.Permissions ??= System.Array.Empty<Permission>();
             var key = new APIKeyData()
             {
                 Id = Encoders.Hex.EncodeData(RandomUtils.GetBytes(20)),
@@ -74,7 +78,7 @@ namespace BTCPayServer.Controllers.GreenField
         public async Task<IActionResult> RevokeKey(string apikey)
         {
             if (string.IsNullOrEmpty(apikey))
-                return BadRequest();
+                return NotFound();
             if (await _apiKeyRepository.Remove(apikey, _userManager.GetUserId(User)))
                 return Ok();
             else

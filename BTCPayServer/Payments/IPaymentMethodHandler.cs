@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using BTCPayServer.Data;
@@ -38,13 +38,10 @@ namespace BTCPayServer.Payments
         /// <returns></returns>
         object PreparePayment(ISupportedPaymentMethod supportedPaymentMethod, StoreData store, BTCPayNetworkBase network);
 
-        void PreparePaymentModel(PaymentModel model, InvoiceResponse invoiceResponse, StoreBlob storeBlob);
+        void PreparePaymentModel(PaymentModel model, InvoiceResponse invoiceResponse, StoreBlob storeBlob,
+            IPaymentMethod paymentMethod);
         string GetCryptoImage(PaymentMethodId paymentMethodId);
         string GetPaymentMethodName(PaymentMethodId paymentMethodId);
-
-        Task<string> IsPaymentMethodAllowedBasedOnInvoiceAmount(StoreBlob storeBlob,
-            Dictionary<CurrencyPair, Task<RateResult>> rate,
-            Money amount, PaymentMethodId paymentMethodId);
 
         IEnumerable<PaymentMethodId> GetSupportedPaymentMethods();
         CheckoutUIPaymentMethodSettings GetCheckoutUISettings();
@@ -71,22 +68,19 @@ namespace BTCPayServer.Payments
             PaymentMethod paymentMethod, StoreData store, TBTCPayNetwork network, object preparePaymentObject);
 
         public abstract void PreparePaymentModel(PaymentModel model, InvoiceResponse invoiceResponse,
-            StoreBlob storeBlob);
+            StoreBlob storeBlob, IPaymentMethod paymentMethod);
         public abstract string GetCryptoImage(PaymentMethodId paymentMethodId);
         public abstract string GetPaymentMethodName(PaymentMethodId paymentMethodId);
-
-        public abstract Task<string> IsPaymentMethodAllowedBasedOnInvoiceAmount(StoreBlob storeBlob,
-            Dictionary<CurrencyPair, Task<RateResult>> rate, Money amount, PaymentMethodId paymentMethodId);
 
         public abstract IEnumerable<PaymentMethodId> GetSupportedPaymentMethods();
         public virtual CheckoutUIPaymentMethodSettings GetCheckoutUISettings()
         {
             return new CheckoutUIPaymentMethodSettings()
             {
-                ExtensionPartial = "Bitcoin_Lightning_LikeMethodCheckout",
-                CheckoutBodyVueComponentName = "BitcoinLightningLikeMethodCheckout",
-                CheckoutHeaderVueComponentName = "BitcoinLightningLikeMethodCheckoutHeader",
-                NoScriptPartialName = "Bitcoin_Lightning_LikeMethodCheckoutNoScript"
+                ExtensionPartial = "Bitcoin/BitcoinLikeMethodCheckout",
+                CheckoutBodyVueComponentName = "BitcoinLikeMethodCheckout",
+                CheckoutHeaderVueComponentName = "BitcoinLikeMethodCheckoutHeader",
+                NoScriptPartialName = "Bitcoin/BitcoinLikeMethodCheckoutNoScript"
             };
         }
 

@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace BTCPayServer.Client
 {
     public partial class BTCPayServerClient
     {
-    
+
         public static Uri GenerateAuthorizeUri(Uri btcpayHost, string[] permissions, bool strict = true,
-            bool selectiveStores = false)
+            bool selectiveStores = false, (string ApplicationIdentifier, Uri Redirect) applicationDetails = default)
         {
             var result = new UriBuilder(btcpayHost);
             result.Path = "api-keys/authorize";
@@ -17,6 +18,15 @@ namespace BTCPayServer.Client
                 {
                     {"strict", strict}, {"selectiveStores", selectiveStores}, {"permissions", permissions}
                 });
+
+            if (applicationDetails.Redirect != null)
+            {
+                AppendPayloadToQuery(result, new KeyValuePair<string, object>("redirect", applicationDetails.Redirect));
+                if (!string.IsNullOrEmpty(applicationDetails.ApplicationIdentifier))
+                {
+                    AppendPayloadToQuery(result, new KeyValuePair<string, object>("applicationIdentifier", applicationDetails.ApplicationIdentifier));
+                }
+            }
 
             return result.Uri;
         }

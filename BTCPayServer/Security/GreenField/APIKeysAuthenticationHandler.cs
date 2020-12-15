@@ -1,13 +1,10 @@
-﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
-using System.Text;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 using BTCPayServer.Client;
 using BTCPayServer.Data;
-using BTCPayServer.Security.Bitpay;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
@@ -43,15 +40,16 @@ namespace BTCPayServer.Security.GreenField
             if (!Context.Request.HttpContext.GetAPIKey(out var apiKey) || string.IsNullOrEmpty(apiKey))
                 return AuthenticateResult.NoResult();
 
-            var key = await _apiKeyRepository.GetKey(apiKey);
+            var key = await _apiKeyRepository.GetKey(apiKey, true);
 
             if (key == null)
             {
                 return AuthenticateResult.Fail("ApiKey authentication failed");
             }
-
             List<Claim> claims = new List<Claim>();
             claims.Add(new Claim(_identityOptions.CurrentValue.ClaimsIdentity.UserIdClaimType, key.UserId));
+            
+            claims.AddRange((await _userManager.GetRolesAsync(key.User)).Select(s => new Claim(_identityOptions.CurrentValue.ClaimsIdentity.RoleClaimType, s)));
             claims.AddRange(Permission.ToPermissions(key.GetBlob().Permissions).Select(permission =>
                 new Claim(GreenFieldConstants.ClaimTypes.Permission, permission.ToString())));
             return AuthenticateResult.Success(new AuthenticationTicket(

@@ -1,26 +1,423 @@
 # Changelog
 
+## 1.0.6.3:
+
+### New features
+
+* Greenfield API: Can update invoice metadata @Kukks
+* Greenfield API: User notifications API @Kukks 
+* Greenfield API: Can specify the preferred language when creating an invoice @NicolasDorier
+* Greenfield API: Can specify the URL to redirect customer to when he paid when creating an invoice @NicolasDorier
+* Greenfield API: Expose the `checkoutLink` of the created invoice, where you need to redirect your customer to pay in BTC @NicolasDorier
+* Add a `Mark all as seen` button to the notification dropdown @ubolator
+* Support of Armenian language in checkout page. Thanks to Mash Mashok
+* Add ability to add custom CSS to pull payments @ubolator
+* Introduce some basic spam protection for hosts with open registration (see #2106) @Kukks
+
+
+### Improvements
+
+* Hide pagination & page size when not necessary (#2122) @dennisreimann @dstrukt
+* Document in `/docs` miscellaneous features of BTCPay (such as optional arguments of the checkout page) @NicolasDorier
+* UI: Improve mobile store setup view @dennisreimann @dstrukt
+* Improve U2F support, should leverage OS support and now work properly on mobile Safari (See #2086) @dennisreimann
+* Improve how new label picked their color (See #2072) @ubolator
+* Improve the design of transaction's label dropdown to fix display issue when there are too many (see #2078) @ubolator
+
+### Bug fixes:
+
+* Ensure campaign status is shown correctly in minimal crowdfund app (#2062) @ubolator
+* Can remove automatic labels from invoices @NicolasDorier
+* Fix Pay Button Link preview when app mode chosen (#2115) @Kukks
+* If the user was not admin, the API Keys page was ignoring some of the checked permissions @NicolasDorier
+* Greenfield API: If invoice creation failed for some reason, BTCPay would give a HTTP 500 error without details helping the user. @NicolasDorier
+* Fix performance issue: Some invoice queries were causing a full table scan on all invoices rather than using an index. @NicolasDorier
+* Fix: Importing an incorrect wallet from BlueWallet was crashing (#2098) @Kukks
+* Fix classic theme for payment requests (Fix #2084) @dennisreimann
+
+### Miscellaneous:
+
+* Removing the bitpay invoice translator @NicolasDorier
+* Improve the documentation of API Keys page @NicolasDorier
+* Fix doc for create invoice request's metadata @NicolasDorier
+* Fix docs for pull payments @Kukks
+
+## 1.0.6.2:
+
+*  Reverting uppercasing of Bech32 addresses in QR code (@Rockstardev)
+
+It turns out this is not compatible with every wallets.
+
+## 1.0.6.1:
+
+### Bug fixes:
+
+* The sync popup when the nodes are synching was not showing up (@Kukks)
+
+## 1.0.6.0:
+
+### Important security fix
+
+* Due to a privacy leak vulnerability, users of the payment button are strongly encouraged to update as soon as possible.
+
+### New features
+
+* Add QR code scan/show for PSBT  + Import wallet via QR [spec](https://github.com/BlockchainCommons/Research/blob/master/papers/bcr-2020-005-ur.md) (supported by Cobo vault / Blue wallet) (#1931)
+* Checkout experience: Unified QR Code for on-chain and offchain payment (ref #2060) (@rockstardev)
+* Greenfield: Clean webhook API github-like (ref #2058) (@NicolasDorier @Kukks)
+* Greenfield: Can query invoice payment data (@Kukks)
+* Allow users to select block explorers from a list or specify their own URL  (@Kukks)
+* Allow disabling live notifications globally and disabling specific notifications per user (ref #1991) (@Kukks)
+* Allow custom redirect_url for PoS (ref #1924) (@mariodian)
+* A new experimental plugin system (@Kukks)
+
+### Improvements
+
+* UI: Make store setup more intuitive (ref #2011) (@dennisreimann @dstrukt)
+* UI: Improve payment request design (ref #2011) (@dennisreimann @dstrukt) (ref #2011) (@dennisreimann @dstrukt)
+* UI: Improve pull payments design (ref #2011) (@dennisreimann @dstrukt)
+* UI: Improvement of the modal checkout overlay  (see [this comment](https://github.com/btcpayserver/btcpayserver/pull/1930#issuecomment-701298441)) (@dennisreimann)
+* BTCPay Server vault operations can now be retried without having to refresh the page (@NicolasDorier)
+* UX: Warning and hint system for stores not completely set up (@dennisreimann @rockstardev)
+* Greenfield (Breaking change): Invoice state renamed `Confirmed/Complete` to `Settled`. (@NicolasDorier)
+* Greenfield (Breaking change): Invoice state renamed `Paid` to `Processing`. (@NicolasDorier)
+* Breaking change: Remove SQLite as the default database option (@Kukks)
+* UI: Make sure transaction labels display correctly when there are many (ref #2076) (@ubolator)
+* UI: Properly center payment button content (@ubolator)
+* UI: Improvement of the lightning node info view (ref #2066) (@dennisreimann)
+* Share the link of a pay button so one can embed in a QR code (fix #635) (@Kukks)
+* Checkout experience: Make QR codes with bech32 uppercase again (@rockstardev)
+* Add warning if the merchant setup invoice confirmation to zero conf (@ubolator)
+* Adds a warning to configure the e-mail server before "Requires a confirmation mail for registering" checkbox can be checked if e-mail server is not configured. (@ubolator)
+* Payment requests: Partially paid invoices are reused for future payments in payment requests. (@NicolasDorier)
+* API Keys UI: Properly align form items (@dennisreimann)
+* Wallets: By default, created PSBT were including previous transactions. Some hardware wallets ended up returning timeouts, so we reverted this decision. (@NicolasDorier)
+
+### Bug fixes:
+
+* Fix payment button page title (ref #1952) (@sgracia13)
+* Do not log the database connection string (@Kukks)
+* Payjoin: Use base64 instead of hex for BIP78 (fix #1984) (@Kukks)
+* If a password fail to be reset by mail, show proper error (fix #1986) (@NicolasDorier)
+* Email was not included in the invoice text search (@Kukks)
+* Greenfield: The create invoice route should not sending back generic errors if it fails (@dennisreimann)
+* Fix-up links which were ignoring custom root path (@ubolator)
+* Greenfield: Opening a channel with lightning was not working properly (ref #2054) (@dennisreimann)
+* Docs: Create invoice route was referencing the wrong type in the doc (@dennisreimann)
+* Payment Request user input rounding issue (ref #2014) (@Kukks)
+* In store settings, the create new token button was returning an error (@NicolasDorier)
+* Wallet: When clicking on the app's label of a transaction, an error 404 occured (@Kukks)
+* Checkout experience: If coinswitch was activated, the altcoin tab was missing (@Kukks)
+* If Email verification is turned off but you requested a forgot password form, it would ignore the request internally. (@Kukks)
+* Docs: Fix swagger format for dates (@Kukks)
+* Payjoin: Do not include maxadditionalfeecontribution if there is no change. (ref #2007) (@NicolasDorier)
+* Checkout: If an invoice accepting lightning payments was partially paid, the payment of the new lightning invoice was buggy. (@Kukks)
+
+## 1.0.5.9:
+
+### Bug fixes:
+
+* If there was too many pending invoice, postgres would be overwhelmed and freeze some requests (Igor Rylko)
+* Emails were not included in the text search anymore @Kukks
+* Payjoin: Do not include maxadditionalfeecontribution if there is no change. @NicolasDorier
+
+## 1.0.5.8:
+
+### Bug fixes:
+
+* Fix payjoin client implementation (was sending hex instead of base64) @Kukks
+* Fix: The send wallet, by default, should not include the previous transaction (timeouts issue with some hardware wallets) @NicolasDorier
+* Do not log the database connection string @Kukks
+* If a password fail to be reset by mail, show proper error @NicolasDorier
+* When you map a specific domain to an app, when there's no app created there's a blank page @Kukks
+
+### Bug fixes:
+
+* Mark Shopify orders paid on invoice payment confirmed @rockstardev
+* Fix: notification of new BTCPay Server not showing properly @rockstardev
+* Fix: When collapsed, the sync window blocks the version text in the footer #1941 @Kukks
+* Fix: Not possible to delete a user if U2F is enabled. @Kukks
+* Fix onion location not always working #1947 @Kukks
+* Fix invoice exception status not displaying in list #1963 @Kukks
+* Fix: Is administrator checkbox does not work on create user page @NicolasDorier
+
+## 1.0.5.7:
+
+### Bug fixes:
+
+* Mark Shopify orders paid on invoice payment confirmed @rockstardev
+* Fix: notification of new BTCPay Server not showing properly @rockstardev
+* Fix: When collapsed, the sync window blocks the version text in the footer #1941 @Kukks
+* Fix: Not possible to delete a user if U2F is enabled. @Kukks
+* Fix onion location not always working #1947 @Kukks
+* Fix invoice exception status not displaying in list #1963 @Kukks
+* Fix: Is administrator checkbox does not work on create user page @NicolasDorier
+
+### Improvements:
+
+* Add specter desktop to the list of Bitcoin RPC compatible wallet @NicolasDorier
+* If some operation using BTCPay Server Vault fails, add a retry button so the user does not have to refresh the page. #1937 @NicolasDorier
+* Do not show password in clear text in email configuration (Fix #1790) @NicolasDorier
+* Showing CheckForNewVersions checkbox only if BTCPAY_UPDATEURL is set @rockstardev
+* Add Created date to user, add verified column in list and make user list use same model as modern lists @Kukks
+* Do not overlap the footer. Also removed the underline for the toggle button in chrome. Fixes #1946 @dennisreimann
+* Improve notifications dropdown #1961 @dennisreimann
+
+### Altcoins
+
+* Fix: DOGE could be trapped, due to our sanity check of absurdly high fee of "1 DOGE". @NicolasDorier
+
+## 1.0.5.6:
+
+### New features:
+
+* Shopify support @rockstardev @Kukks
+* Can enable/disable any payment method based on the amount of the invoice #1871 @xpayserver
+* New Invoice API in Greenfield (Still incomplete, more for next release) @Kukks @NicolasDorier
+* A new light view more adapted for Point of Sale @mariodian
+* Allows administrator to invite new users via link and email @Kukks
+* New labels in the wallet for payment requests, apps, and improvement of the payout label @Kukks
+* Allows entry in wallet send via fiat #1891 @Kukks
+* Allows partial invoice refund #1882 @Kukks
+* In the Request API key flow, let the user be redirected to the original website #1800 @Kukks @dennisreimann ([more info](https://docs.btcpayserver.org/API/Greenfield/v1/#tag/Authorization))
+* Invoice logs now show their severity #1681 @Kukks (see https://i.imgur.com/eyMO9M3.png)
+* Add store sort (#1861) @bolatovumar
+
+### Improvements:
+
+* Update PSBT and PSBT sent to Hardware wallet will include `non_witness_utxo` by default, when possible, to match Bitcoin Core 0.20.1 behavior. @NicolasDorier
+* Adjust invoice badge styling (#1906) @bolatovumar
+* Invoice notification email improvements (#1875) @dennisreimann
+* Improvement of the UX flow for requesting an API Key of a BTCPay Server user (#1898) @dennisreimann
+* Don't send notification email for expired invoices @dennisreimann
+* Greenfield API: Add `Roles` property to the user data. @dennisreimann
+* Remove Changelly integration @Kukks
+* Better wording in transaction list page #1887 @maltokyo
+* Fix alerts text break. #1865 @bolatovumar
+* Remove Tor link from navbar @NicolasDorier
+* Improve invoices list view #1815 @dennisreimann
+* Improve sync progress dialog #1929 @Kukks
+* Show index of payment address for onchain payments @Kukks
+
+### Bug fixes:
+* When an invoice is partially paid on-chain and allow off-chain, a new lightning network invoice should be created for the remainder of the payment. @Kukks
+* Changing the inventory of a PoS item was not working properly (@mariodian)
+* Greenfield API: The internal lightning API was returning error 403, even when used as an administrator (@Kukks)
+* Using lightning charge as lightning network invoice provider over HTTP was not working properly @bolatovumar
+* Fix: If the hot wallet failed to sign a PSBT, should not show a blank page crash (@NicolasDorier)
+* Fix bug: The wallet was sending only round amount of sat per byte (@NicolasDorier)
+* "Attempt MySql Fix" #1856 @Kukks
+* Fix HitBTC rate provider again @NicolasDorier
+
+### Altcoin build
+* MonetaryUnit support (MUE) @sotblad
+* ETH/ERC20 support @xpayserver
+* Fix monero crash #1883 @Kukks
+
+## 1.0.5.5:
+
+### Improvements
+* UI: Improve mobile login views (#1833 @DennisReimann)
+* Pull payments claim & payout notification rewording (#1825 @Zaxounette)
+* Do not load webfonts from google font server, serve locally (@DennisReimann)
+
+### Bug fixes
+* Fix some crashes when switching from Altcoins edition to Bitcoin-Only. (@Kukks @NicolasDorier)
+* Fix invoices CSV Export formatting introduced in 1.0.5.4 (@NicolasDorier)
+* UI: Fix custom-select glitch (#1822 @DennisReimann)
+* Fix crash with hitbtc rate provider (@NicolasDorier)
+
+## 1.0.5.4:
+
+### New features and improvements
+* BTCPayServer has now two different build Bitcoin-Only and Altcoins. See more [in our blog post](https://blog.btcpayserver.org/btcpay-server-1-0-5-4) (@xpayserver)
+* Wallet UI improvement #1763 @dennisreimann
+* Improve pull payment view #1764 @dennisreimann
+* Login/Register view UI improvements #1752 @dennisreimann
+* Manage store UI improvements #1761 @dennisreimann
+* Improve the UX when creating a new seed #1745 @dennisreimann
+* Allow selection of all notifications at once in notification list #1751 @bolatovumar
+* Add filtering to Payment Requests @rockstardev
+* Last filter used in payment requests and invoice list are now saved in user's preferences (cookie) #1775 #1498 @rockstardev
+* Notification when new version of btcpayserver is available. $1420 @rockstardev
+* Can sort apps list by store name, name or app type #1753 @bolatovumar
+* Improve query performance when listing invoices @NicolasDorier
+* Add margin to Delete store #1773 @bolatovumar
+* Add pagination to wallet's transaction page #1772 @bolatovumar
+* Improve VSCode user development experience #1769 @msafi
+* Fix error message positioning in PoS #1759 @bolatovumar
+* Fix swagger doc for approve payout @NicolasDorier
+* Use BTCPay doc for RBF explanation tooltip @britttttk
+* Allow mass archiving of invoices #1742 @bolatovumar
+* Improve 2FA UI #1741 @dennisreimann
+* .gitignore .DStore @Eskyee
+* Allow RPC access in services when the node is synching @NicolasDorier
+
+### Bug fixes
+* Fix: In the PoS app, embedded CSS was ignored. @NicolasDorier
+* Fix error when modifying user who does not have admin right. #1793 @NicolasDorier
+* Fix null instance on invoice when using paymentCurrencies #1766 @Kukks
+* Fix: Sluggish scrolling in pages having a rich text editor @dennisreimann
+* Fix: Crash in payment request if there is several invoice in "new" state @Kukks
+* Fix: Crowdfund app doesn't count old invoices. It was only invoices created after enabling the option. @Kukks
+
+### Security fixes
+Those are low risk injection vulnerabilities.
+* Prevent script injection via X-Forwarded-For (reported by @benichmt1) @NicolasDorier
+* Prevent script injection via the csv invoice export (reported by @benichmt1) @NicolasDorier
+
+### Altcoins
+
+* BTCPay Server build is Bitcoin Only by default. If you are developer and wants to work on the altcoins build, please read [the documentation](https://docs.btcpayserver.org/LocalDevelopment/).
+* Show sync progress for monero and show amount of monero payment #1729 @xpayserver
+
+## 1.0.5.3:
+
+### Bug fixes
+* Payouts list incorrectly filtered if more than two pull payments (@arc3x)
+* Make it possible to refund invoice in the invalid state (@NicolasDorier)
+* Sane error message from the server if Basic authentication is not properly encoded in base64 (@Kukks)
+* Fix typos in pull payments (@Zaxounette)
+
+### New features and improvements
+* Add download PSBT button in the PSBT's screen of the wallet (@Kukks)
+* Upload PSBT button now support both, a file with base64 PSBT in it, or the raw bytes (@Kukks)
+* Make payjoin works with hardware wallets, need latest release of BTCPayServer Vault (@Kukks)
+* Better design for 2FA config screens (@Kukks #1735)
+* Enable CORS on greenfield API (@Kukks)
+* UI cleanup in the account section (@dennisreimann see #1721)
+* Improve information structure in the store's lightning page (@dennisreimann see #1706)
+* Various code cleanup (@rockstardev)
+* Set noindex, nofollow on the payment request page and pull payment page (@RiccardoMasutti)
+* Improve "Send" screen address field UX (@bolatovumar #1723)
+* Fix appearance of table in pull payments page (@bolatovumar #1732 and #1733)
+* Improve service settings,  email settings, improve users list, U2F, 2FA, login view and maintenance page (@dennisreimann #1727)
+* Update translation for Deutsch and አማርኛ (Peter Battermann and @lbtil)
+
+
+## 1.0.5.2:
+
+### Bug fixes
+* Do not include the Onion-Location header for custom domains mapping (@NicolasDorier)
+* Fix warning message when using SQLite (@NicolasDorier)
+* Create store could be called with a scoped store's modify apikey (@NicolasDorier)
+* Crowdfunding app used with a custom domain were showing blank page (@NicolasDorier)
+
+## 1.0.5.1:
+
+### Bug fixes
+* Point of sales app used with a custom domain were showing blank page (@NicolasDorier)
+
+## 1.0.5.0:
+
+### New Features and improvements
+* Add Notifications feature (@r0ckstardev)
+* Add Pull Payments feature (@NicolasDorier)
+* Add Refund feature (@NicolasDorier
+* Allow invoice and payment requests to be archived (hide from list) (@Kukks)
+* Improve fee selection UI in wallet send screen (@Kukks)
+* Show warning when enabling Payjoin but supported payment methods are not using a hot wallet (@Kukks)
+* Rebuild POS and Crowdfund App Item/Perk editor UI and fix any issues (@Kukks)
+* Adjust Payjoin to the new specification outlined in BIP78 (@NicolasDorier) 
+* Allow opening the BTCPay wallet natively when clicking a Bitcoin payment link (BIP21)
+* Add Server Info GreenField API (@dennisreimann)
+* Add Payment Requests GreenField API (@Kukks @NicolasDorier)
+* Support specifying payment method through apps per item/perk (@Kukks)
+* Allow setting private route hints for LND invoices (@r0ckstardev)
+* Expand GreenField Store API to have more store properties (@Kukks @NicolasDorier)
+* Make GreenField local docs require authentication (@Kukks)
+* Privacy enhancement: Randomize wallet transaction fingerprint. (@NicolasDorier)
+* Randomize RBF support in BTCPay wallet by default for privacy (@NicolasDorier)
+* Add support for Cobo Vault wallet file import (@Kukks)
+* Add support for Wasabi wallet file import (@Kukks)
+* Split POS app cart and static and support both simultaneously (@dennisreimann)
+* Add Cross-Implementation Lightning Node GreenField API (@Kukks @NicolasDorier)
+* Make GreenField responses and JSON properties consistent (@Kukks @NicolasDorier)
+* Add Tor Onion-Location HTTP header (@dennisreimann) 
+* Rename form items in Wallet Send UI (@pavlenex)
+* Add ThunderHub integration (@NicolasDorier)
+* Add option to attempt to create PSBT with full transaction for inputs to sign for Trezor (@Kukks)
+### Bug fixes
+
+* Do not auto-complete generate wallet form (@Kukks)
+* Make sure copied notification is positioned correctly on checkout (@chewsta)
+* Fix broken documentation links (@Kukks @dennisreimann @jad0c @Eskyee @pavlenex)
+* Fix POS app item display issues (@bolatovumar)
+* Fix Invoice checkout modal close button theme issues (@bolatovumar)
+* Fix display of replaced transactions in invoice list (@NicolasDorier)
+* Support BitPay invoice creation property "paymentCurrencies" (@Kukks)
+* Update lightning support warning text (@janoside)
+* Fix issue with payment requests not expiring (@Kukks)
+* Fix broken Bootstrap theme generator link (@Kukks)
+* Use proper Bitcoin symbol (₿) in UI instead of "BTC" (@Kukks)
+* Ensure you can only sign with hot wallet if you created the hot wallet via seed (@NicolasDorier)
+* Respect JsonResponse option in payment button endpoint even for failures (@Kukks)
+* Opt out of dotnet telemetry in Docker containers (@Kukks)
+* Fix issue with POS app if button text had special formatting (@Kukks)
+* Autofocus 2FA-code input on page load (@dennisreimann)
+* Add Orderid to BitPay IPN format (@Kukks)
+* Require Owner role to the store for modifying store via Greenfield (@NicolasDorier)
+* Fix css styling classes (@woutersamaey)
+* Fix checkout high width resolution styling issues (@dennisreimann)
+* Fix zpub electrum import (@gruve-p)
+## 1.0.4.4:
+
+### New Feature
+
+* Allow user to select different fee rate based on expected confirmation time (@NicolasDorier)
+
+### Bug fixes
+
+* Fix QR Code on dark theme by adding some white margin around it (@chewsta)
+* Make sure wallet support decimal fee ... again. (@NicolasDorier)
+
+## 1.0.4.3:
+
+### New features
+
+* If you use a hot wallet, you can retrieve the seed in wallet settings / Other actions / View seed (@kukks)
+* Add top Label filter (@kukks)
+* As a sender, payjoin transaction are tagged in the wallet (@kukks)
+
+### Bug fixes
+
+* The wallet now discourage fee sniping (increase privacy by mimicking wallets like bitcoin core) (@NicolasDorier)
+* Payjoin receiver fix: The receiver's inputs sequence must be the same as the sender's inputs' sequence (@NicolasDorier, reported by @waxwing)
+* The wallet do not round fee rate to the nearest integer. (@NicolasDorier)
+* Invoice row should not cut off the "AM/PM" part of the date (@r0ckstardev)
+* Ensure dropdown in checkout page does not overflow (@ubolator)
+* Fix decimal points shown in Checkout UI based on currency ( always showed btc decimal precision before) (@kukks #1529)
+* fix label link inconsistency (@kukks)
+* Fix payjoin detection in checkout UI (@kukks)
+
+### Altcoins
+* For liquid, fix decimal precision issue in the wallet (@kukks)
+* For liquid, the transactions in a wallet of a specific asset should only show transactions specific to this asset (@kukks)
+
+### Language
+* Update portuguese strings (@BitcoinHeiro)
+
 ## 1.0.4.2
 
 ### New feature and improvements
-* Auto labelling of wallet transactions, for now three labels "invoice", "pj-exposed", "payjoin" (@MrKukks)
+* Auto labelling of wallet transactions, for now three labels "invoice", "pj-exposed", "payjoin" (@kukks)
 * Checkout dark theme improvements (@dennisreimann #1508)
-* Show warning when create a hot wallet when you are not admin of the server (@MrKukks)
-* In store settings, shows "Not set" if a derivation scheme is not set. If it is set, always show the last few letters of the derivation scheme. (@MrKukks)
-* Do not show lightning network configuration for Liquid assets. (@MrKukks)
-* Better UTXO selection for payjoin receiver (@MrKukks #1470)
+* Show warning when create a hot wallet when you are not admin of the server (@kukks)
+* In store settings, shows "Not set" if a derivation scheme is not set. If it is set, always show the last few letters of the derivation scheme. (@kukks)
+* Do not show lightning network configuration for Liquid assets. (@kukks)
+* Better UTXO selection for payjoin receiver (@kukks #1470)
 * Payjoin: But the automatic broadcast of original transaction from 1 minute to 2 minutes. (to give more time to sign with a hardware wallet)
 * Greenfield: Expose an health check endpoint without authentication (@dennisreimann)
-* Greenfield: Very primitive create/read/update/delete store endpoints (@MrKukks)
+* Greenfield: Very primitive create/read/update/delete store endpoints (@kukks)
 
 ### Bug fixes
 * With LND above 0.9, invoices were immediately transitioning as partially paid. (@r0ckstardev)
-* Successful payjoin in P2SH-P2WPKH would result in overpaid invoice (@MrKukks)
-* If payjoin sender is sending the PSBT in hex format, we should send back the proposal in hex format (@MrKukks)
-* Payment request were redirecting to non-existing (404) URL after payment (@MrKukks)
-* Incorrect derivation scheme in generate wallet were giving an error 500 instead of proper error message (@MrKukks)
-* When pasting a BIP21 when using coin selection, it would throw an error. (@MrKukks)
-* In the Wallet Send page, remove a JS script reference which does not exist anymore. (@MrKukks)
+* Successful payjoin in P2SH-P2WPKH would result in overpaid invoice (@kukks)
+* If payjoin sender is sending the PSBT in hex format, we should send back the proposal in hex format (@kukks)
+* Payment request were redirecting to non-existing (404) URL after payment (@kukks)
+* Incorrect derivation scheme in generate wallet were giving an error 500 instead of proper error message (@kukks)
+* When pasting a BIP21 when using coin selection, it would throw an error. (@kukks)
+* In the Wallet Send page, remove a JS script reference which does not exist anymore. (@kukks)
 * Fix LCAD logo (@dennisreimann)
 * Fix dark theme contrast for Payment Requests (@ubolator and @dennisreimann #1488)
 * Fix MySql supports details (@ketominer)
@@ -55,9 +452,9 @@
 ## 1.0.4.1
 
 ### Bug fixes
-* Payjoin not working correctly for P2SH-P2WPKH merchants. @MrKukks
+* Payjoin not working correctly for P2SH-P2WPKH merchants. @kukks
 
-* Clicking on the balance amount on send wallet, was not checking "Substract fees" automatically @MrKukks
+* Clicking on the balance amount on send wallet, was not checking "Substract fees" automatically @kukks
 
 ## 1.0.4.0
 

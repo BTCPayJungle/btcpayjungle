@@ -1,13 +1,10 @@
-﻿using System.Collections.Concurrent;
 using System.Net;
-using System.Net.Http;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using BTCPayServer.Configuration;
-using NBitcoin;
-using NBitcoin.Protocol.Connectors;
 using NBitcoin.Protocol;
+using NBitcoin.Protocol.Connectors;
 
 namespace BTCPayServer.Services
 {

@@ -1,15 +1,15 @@
-﻿using System;
-using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using BTCPayServer.Events;
 using BTCPayServer.Logging;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using NBXplorer;
 using NBXplorer.Models;
-using System.Collections.Concurrent;
-using BTCPayServer.Events;
 
 namespace BTCPayServer.HostedServices
 {
@@ -29,7 +29,8 @@ namespace BTCPayServer.HostedServices
             public StatusResult Status { get; set; }
             public string Error { get; set; }
         }
-        ConcurrentDictionary<string, NBXplorerSummary> _Summaries = new ConcurrentDictionary<string, NBXplorerSummary>();
+
+        readonly ConcurrentDictionary<string, NBXplorerSummary> _Summaries = new ConcurrentDictionary<string, NBXplorerSummary>();
         public void Publish(BTCPayNetworkBase network, NBXplorerState state, StatusResult status, string error)
         {
             var summary = new NBXplorerSummary() { Network = network, State = state, Status = status, Error = error };
@@ -43,7 +44,7 @@ namespace BTCPayServer.HostedServices
 
         public bool IsFullySynched(string cryptoCode, out NBXplorerSummary summary)
         {
-            return _Summaries.TryGetValue(cryptoCode.ToUpperInvariant(), out summary) && 
+            return _Summaries.TryGetValue(cryptoCode.ToUpperInvariant(), out summary) &&
                    summary.Status?.IsFullySynched is true;
         }
         public NBXplorerSummary Get(string cryptoCode)
@@ -59,7 +60,7 @@ namespace BTCPayServer.HostedServices
 
     public class NBXplorerWaiters : IHostedService
     {
-        List<NBXplorerWaiter> _Waiters = new List<NBXplorerWaiter>();
+        readonly List<NBXplorerWaiter> _Waiters = new List<NBXplorerWaiter>();
         public NBXplorerWaiters(NBXplorerDashboard dashboard, ExplorerClientProvider explorerClientProvider, EventAggregator eventAggregator)
         {
             foreach (var explorer in explorerClientProvider.GetAll())
@@ -90,10 +91,10 @@ namespace BTCPayServer.HostedServices
             _Dashboard.Publish(_Network, State, null, null);
         }
 
-        NBXplorerDashboard _Dashboard;
-        BTCPayNetwork _Network;
-        EventAggregator _Aggregator;
-        ExplorerClient _Client;
+        readonly NBXplorerDashboard _Dashboard;
+        readonly BTCPayNetwork _Network;
+        readonly EventAggregator _Aggregator;
+        readonly ExplorerClient _Client;
 
         CancellationTokenSource _Cts;
         Task _Loop;
@@ -183,12 +184,12 @@ namespace BTCPayServer.HostedServices
             }
 
 
-            if(status == null && error == null)
+            if (status == null && error == null)
                 error = $"{_Network.CryptoCode}: NBXplorer does not support this cryptocurrency";
 
-            if(status != null && error == null)
+            if (status != null && error == null)
             {
-                if(status.NetworkType != _Network.NBitcoinNetwork.NetworkType)
+                if (status.NetworkType != _Network.NBitcoinNetwork.NetworkType)
                     error = $"{_Network.CryptoCode}: NBXplorer is on a different ChainType (actual: {status.NetworkType}, expected: {_Network.NBitcoinNetwork.NetworkType})";
             }
 

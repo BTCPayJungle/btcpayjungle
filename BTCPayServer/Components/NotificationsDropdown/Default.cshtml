@@ -1,0 +1,85 @@
+@inject LinkGenerator linkGenerator
+@inject UserManager<ApplicationUser> UserManager
+@inject CssThemeManager CssThemeManager
+@using BTCPayServer.HostedServices
+@using Microsoft.AspNetCore.Http.Extensions
+@model BTCPayServer.Components.NotificationsDropdown.NotificationSummaryViewModel
+
+@if (Model.UnseenCount > 0)
+{
+    <li class="nav-item dropdown" id="notifications-nav-item">
+        <a class="nav-link js-scroll-trigger" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" id="Notifications">
+            <i class="fa fa-bell"></i>
+        </a>
+        <span class="alerts-badge badge badge-pill badge-danger">@Model.UnseenCount</span>
+        <div class="dropdown-menu dropdown-menu-right text-center notification-items" aria-labelledby="navbarDropdown">
+            @foreach (var notif in Model.Last5)
+            {
+                <a asp-action="NotificationPassThrough" asp-controller="Notifications" asp-route-id="@notif.Id" class="dropdown-item border-bottom py-2 px-3">
+                    <div class="text-left" style="width: 200px; white-space:normal;">
+                        @notif.Body
+                    </div>
+                    <div class="text-left">
+                        <small class="text-muted" data-timeago-unixms="@notif.Created.ToUnixTimeMilliseconds()">@notif.Created.ToTimeAgo()</small>
+                    </div>
+                </a>
+            }
+            <a class="dropdown-item text-secondary" asp-controller="Notifications" asp-action="Index">See All</a>
+            <form asp-controller="Notifications" asp-action="MarkAllAsSeen" asp-route-returnUrl="@Context.Request.GetDisplayUrl()" method="post">
+                <button class="dropdown-item text-secondary" type="submit"><i class="fa fa-eye"></i> Mark all as seen</button>
+            </form>
+        </div>
+    </li>
+}
+else
+{
+    <li class="nav-item" id="notifications-nav-item">
+        <a asp-controller="Notifications" asp-action="Index" title="Notifications" class="nav-link js-scroll-trigger" id="Notifications">
+            <i class="fa fa-bell"></i>
+        </a>
+    </li>
+}
+@{
+    var disabled = CssThemeManager.Policies.DisableInstantNotifications;
+    if (!disabled)
+    {
+        var user = await UserManager.GetUserAsync(User);
+        disabled = user.DisabledNotifications == "all";
+    }
+}
+@if (!disabled)
+{
+
+    <script type="text/javascript">
+
+    var supportsWebSockets = 'WebSocket' in window && window.WebSocket.CLOSING === 2;
+
+    if (supportsWebSockets) {
+
+        var loc = window.location, ws_uri;
+        if (loc.protocol === "https:") {
+            ws_uri = "wss:";
+        } else {
+            ws_uri = "ws:";
+        }
+        ws_uri += "//" + loc.host;
+        ws_uri += "@linkGenerator.GetPathByAction("SubscribeUpdates", "Notifications")";
+        var newDataEndpoint = "@linkGenerator.GetPathByAction("GetNotificationDropdownUI", "Notifications")";
+    
+        try {
+            socket = new WebSocket(ws_uri);
+            socket.onmessage = function (e) {
+                $.get(newDataEndpoint, function(data){
+                    $("#notifications-nav-item").replaceWith($(data));
+               });
+            };
+            socket.onerror = function (e) {
+                console.error("Error while connecting to websocket for notifications (callback)", e);
+            };
+        }
+        catch (e) {
+            console.error("Error while connecting to websocket for notifications", e);
+        }
+    }
+    </script>
+}

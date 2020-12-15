@@ -1,9 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+using System;
+#if ALTCOINS
+using BTCPayServer.Services.Altcoins.Ethereum.Payments;
 using BTCPayServer.Services.Altcoins.Monero.Payments;
+#endif
 using BTCPayServer.Services.Invoices;
+using NBitcoin;
 using Newtonsoft.Json.Linq;
 
 namespace BTCPayServer.Payments
@@ -22,6 +23,13 @@ namespace BTCPayServer.Payments
         /// </summary>
         public static LightningPaymentType LightningLike => LightningPaymentType.Instance;
 
+#if ALTCOINS
+        /// <summary>
+        /// Monero payment
+        /// </summary>
+        public static MoneroPaymentType MoneroLike => MoneroPaymentType.Instance;
+#endif
+
         public static bool TryParse(string paymentType, out PaymentType type)
         {
             switch (paymentType.ToLowerInvariant())
@@ -34,9 +42,14 @@ namespace BTCPayServer.Payments
                 case "offchain":
                     type = PaymentTypes.LightningLike;
                     break;
+#if ALTCOINS
                 case "monerolike":
-                    type = MoneroPaymentType.Instance;
+                    type = PaymentTypes.MoneroLike;
                     break;
+                case "ethereumlike":
+                    type = EthereumPaymentType.Instance;
+                    break;
+#endif
                 default:
                     type = null;
                     return false;
@@ -59,13 +72,25 @@ namespace BTCPayServer.Payments
             return GetId();
         }
 
+        /// <summary>
+        /// A string we can expose to Greenfield API, not subjected to internal legacy
+        /// </summary>
+        /// <returns></returns>
+        public virtual string ToStringNormalized()
+        {
+            return ToString();
+        }
+
         public abstract string GetId();
+        public virtual string GetBadge() => null;
         public abstract CryptoPaymentData DeserializePaymentData(BTCPayNetworkBase network, string str);
         public abstract string SerializePaymentData(BTCPayNetworkBase network, CryptoPaymentData paymentData);
         public abstract IPaymentMethodDetails DeserializePaymentMethodDetails(BTCPayNetworkBase network, string str);
         public abstract string SerializePaymentMethodDetails(BTCPayNetworkBase network, IPaymentMethodDetails details);
         public abstract ISupportedPaymentMethod DeserializeSupportedPaymentMethod(BTCPayNetworkBase network, JToken value);
         public abstract string GetTransactionLink(BTCPayNetworkBase network, string txId);
+        public abstract string GetPaymentLink(BTCPayNetworkBase network, IPaymentMethodDetails paymentMethodDetails,
+            Money cryptoInfoDue, string serverUri);
         public abstract string InvoiceViewPaymentPartialName { get; }
     }
 }

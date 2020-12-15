@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-
 namespace BTCPayServer.Events
 {
-    public class InvoiceIPNEvent
+    public class InvoiceIPNEvent : IHasInvoiceId
     {
         public InvoiceIPNEvent(string invoiceId, int? eventCode, string name)
         {
@@ -23,7 +18,7 @@ namespace BTCPayServer.Events
         public override string ToString()
         {
             string ipnType = "IPN";
-            if(EventCode.HasValue)
+            if (EventCode.HasValue)
             {
                 ipnType = $"IPN ({EventCode.Value} {Name})";
             }

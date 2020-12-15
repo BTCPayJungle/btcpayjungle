@@ -1,4 +1,4 @@
-﻿@model WalletSendVaultModel
+@model WalletSendVaultModel
 @{
     Layout = "../Shared/_NavLayout.cshtml";
     ViewData["Title"] = "Manage wallet";
@@ -22,12 +22,11 @@
     <div id="body" class="col-md-10">
         <form id="broadcastForm" asp-action="WalletSendVault" asp-route-walletId="@this.Context.GetRouteValue("walletId")" method="post" style="display:none;">
             <input type="hidden" id="WalletId" asp-for="WalletId" />
-            <input type="hidden" id="PSBT" asp-for="PSBT" value="@Model.PSBT"/>
-            <input type="hidden" id="OriginalPSBT" asp-for="OriginalPSBT" value="@Model.OriginalPSBT"/>
             <input type="hidden" asp-for="WebsocketPath" />
-            <input type="hidden" asp-for="PayJoinEndpointUrl" />
+            <partial name="SigningContext" for="SigningContext" />
         </form>
         <div id="vaultPlaceholder"></div>
+        <button class="btn btn-primary vault-retry" style="display:none;" type="button">Retry</button>
         <button id="vault-confirm" class="btn btn-primary" style="display:none;"></button>
     </div>
 </div>
@@ -51,15 +50,15 @@
             ws_uri += websocketPath;
             var html = $("#VaultConnection").html();
             $("#vaultPlaceholder").html(html);
-
             var vaultUI = new vaultui.VaultBridgeUI(ws_uri);
-            if (await vaultUI.askForDevice() && await vaultUI.askSignPSBT({
+            
+            while (!await vaultUI.askForDevice() || !await vaultUI.askSignPSBT({
                 walletId: $("#WalletId").val(),
-                psbt: $("#PSBT").val()
+                psbt: $("#SigningContext_PSBT").val()
             })) {
-                $("#PSBT").val(vaultUI.psbt);
-                $("#broadcastForm").submit();
             }
+            $("#SigningContext_PSBT").val(vaultUI.psbt);
+            $("#broadcastForm").submit();
         }
         $(function () {
             askSign();

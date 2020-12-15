@@ -1,23 +1,23 @@
-﻿using System;
-using System.Net.Http;
-using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
+using System.Net.Http;
 using BTCPayServer.Configuration;
-using BTCPayServer.Logging;
-using NBXplorer;
 using BTCPayServer.HostedServices;
+using BTCPayServer.Logging;
+using Microsoft.Extensions.Logging;
+using NBXplorer;
 
 namespace BTCPayServer
 {
     public class ExplorerClientProvider
     {
-        BTCPayNetworkProvider _NetworkProviders;
-        BTCPayServerOptions _Options;
+        readonly BTCPayNetworkProvider _NetworkProviders;
+        readonly BTCPayServerOptions _Options;
 
         public BTCPayNetworkProvider NetworkProviders => _NetworkProviders;
-        NBXplorerDashboard _Dashboard;
+
+        readonly NBXplorerDashboard _Dashboard;
         public ExplorerClientProvider(IHttpClientFactory httpClientFactory, BTCPayNetworkProvider networkProviders, BTCPayServerOptions options, NBXplorerDashboard dashboard)
         {
             _Dashboard = dashboard;
@@ -48,14 +48,14 @@ namespace BTCPayServer
                 Logs.Configuration.LogWarning($"{explorer.CryptoCode}: Not using cookie authentication");
                 explorer.SetNoAuth();
             }
-            if(!explorer.SetCookieAuth(cookieFile))
+            if (!explorer.SetCookieAuth(cookieFile))
             {
                 Logs.Configuration.LogWarning($"{explorer.CryptoCode}: Using cookie auth against NBXplorer, but {cookieFile} is not found");
             }
             return explorer;
         }
 
-        Dictionary<string, ExplorerClient> _Clients = new Dictionary<string, ExplorerClient>();
+        readonly Dictionary<string, ExplorerClient> _Clients = new Dictionary<string, ExplorerClient>();
 
         public ExplorerClient GetExplorerClient(string cryptoCode)
         {

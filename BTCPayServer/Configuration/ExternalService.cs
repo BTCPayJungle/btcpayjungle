@@ -1,9 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Threading.Tasks;
-using BTCPayServer.Lightning;
 using Microsoft.Extensions.Configuration;
 
 namespace BTCPayServer.Configuration
@@ -36,6 +34,10 @@ namespace BTCPayServer.Configuration
                                 $"Valid example: 'server=https://btcpay.example.com/rtl/btc/;cookiefile=/etc/clightning_bitcoin_rtl/.cookie'" + Environment.NewLine +
                                 "Error: {1}",
                                 "Ride the Lightning server");
+            Load(configuration, cryptoCode, "thunderhub", ExternalServiceTypes.ThunderHub, "Invalid setting {0}, " + Environment.NewLine +
+                                $"Valid example: 'server=https://btcpay.example.com/thub/;cookiefile=/etc/clightning_bitcoin_rtl/.cookie'" + Environment.NewLine +
+                                "Error: {1}",
+                                "ThunderHub");
             Load(configuration, cryptoCode, "clightningrest", ExternalServiceTypes.CLightningRest, "Invalid setting {0}, " + Environment.NewLine +
                                 $"Valid example: 'server=https://btcpay.example.com/clightning-rest/btc/;cookiefile=/etc/clightning_bitcoin_rtl/.cookie'" + Environment.NewLine +
                                 "Error: {1}",
@@ -45,7 +47,7 @@ namespace BTCPayServer.Configuration
                                 $"lightning charge server: 'type=charge;server=https://charge.example.com;cookiefilepath=/root/.charge/.cookie'" + Environment.NewLine +
                                 "Error: {1}",
                                 "C-Lightning (Charge server)");
-            
+
         }
 
         public void LoadNonCryptoServices(IConfiguration configuration)
@@ -58,7 +60,7 @@ namespace BTCPayServer.Configuration
 
         void Load(IConfiguration configuration, string cryptoCode, string serviceName, ExternalServiceTypes type, string errorMessage, string displayName)
         {
-            var setting = $"{(!string.IsNullOrEmpty(cryptoCode)? $"{cryptoCode}.": string.Empty)}external.{serviceName}";
+            var setting = $"{(!string.IsNullOrEmpty(cryptoCode) ? $"{cryptoCode}." : string.Empty)}external.{serviceName}";
             var connStr = configuration.GetOrDefault<string>(setting, string.Empty);
             if (connStr.Length != 0)
             {
@@ -102,6 +104,7 @@ namespace BTCPayServer.Configuration
         LNDSeedBackup,
         Spark,
         RTL,
+        ThunderHub,
         Charge,
         P2P,
         RPC,

@@ -1,16 +1,12 @@
-﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 using NBitcoin;
 
 namespace BTCPayServer.Models.WalletViewModels
 {
     public class WalletPSBTReadyViewModel
     {
-        public string PayJoinEndpointUrl { get; set; }
-        public string OriginalPSBT { get; set; }
-        public string PSBT { get; set; }
+        public SigningContextModel SigningContext { get; set; } = new SigningContextModel();
         public string SigningKey { get; set; }
         public string SigningKeyPath { get; set; }
         public string GlobalError { get; set; }

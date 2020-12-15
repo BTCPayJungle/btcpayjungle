@@ -1,15 +1,10 @@
-﻿using BTCPayServer.Data;
-using DBriize;
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using BTCPayServer.Data;
+using Microsoft.EntityFrameworkCore;
 using NBitcoin;
 using NBitcoin.DataEncoders;
-using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Query;
-using System.Linq;
 
 namespace BTCPayServer.Security.Bitpay
 {
@@ -23,7 +18,7 @@ namespace BTCPayServer.Security.Bitpay
 
     public class TokenRepository
     {
-        ApplicationDbContextFactory _Factory;
+        readonly ApplicationDbContextFactory _Factory;
         public TokenRepository(ApplicationDbContextFactory dbFactory)
         {
             if (dbFactory == null)
@@ -86,7 +81,7 @@ namespace BTCPayServer.Security.Bitpay
 
             using (var ctx = _Factory.CreateContext())
             {
-                ctx.ApiKeys.RemoveRange(keys.Select(s => new APIKeyData() {Id = s}));
+                ctx.ApiKeys.RemoveRange(keys.Select(s => new APIKeyData() { Id = s }));
                 await ctx.SaveChangesAsync();
             }
         }
@@ -95,7 +90,7 @@ namespace BTCPayServer.Security.Bitpay
         {
             using (var ctx = _Factory.CreateContext())
             {
-                return await ctx.ApiKeys.Where(o => o.StoreId == storeId && o.Type== APIKeyType.Legacy).Select(c => c.Id).ToArrayAsync();
+                return await ctx.ApiKeys.Where(o => o.StoreId == storeId && o.Type == APIKeyType.Legacy).Select(c => c.Id).ToArrayAsync();
             }
         }
 

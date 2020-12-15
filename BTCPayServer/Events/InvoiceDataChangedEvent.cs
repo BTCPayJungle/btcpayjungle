@@ -1,12 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using BTCPayServer.Services.Invoices;
 
 namespace BTCPayServer.Events
 {
-    public class InvoiceDataChangedEvent
+    public class InvoiceDataChangedEvent : IHasInvoiceId
     {
         public InvoiceDataChangedEvent(InvoiceEntity invoice)
         {

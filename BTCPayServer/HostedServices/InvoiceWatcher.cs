@@ -1,17 +1,19 @@
-﻿using NBXplorer;
-using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
-using NBitcoin;
-using BTCPayServer.Logging;
 using System.Threading;
-using Microsoft.Extensions.Hosting;
-using System.Collections.Concurrent;
-using BTCPayServer.Events;
-using BTCPayServer.Services.Invoices;
 using System.Threading.Channels;
+using System.Threading.Tasks;
+using BTCPayServer.Client.Models;
+using BTCPayServer.Events;
+using BTCPayServer.Logging;
+using BTCPayServer.Services.Invoices;
+using BTCPayServer.Services.Notifications;
+using BTCPayServer.Services.Notifications.Blobs;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using NBitcoin;
+using NBXplorer;
 
 namespace BTCPayServer.HostedServices
 {
@@ -27,65 +29,74 @@ namespace BTCPayServer.HostedServices
             public List<object> Events { get; set; } = new List<object>();
 
             bool _Dirty = false;
+            private bool _Unaffect;
+
             public void MarkDirty()
             {
                 _Dirty = true;
             }
 
+            public void UnaffectAddresses()
+            {
+                _Unaffect = true;
+            }
+
             public bool Dirty => _Dirty;
+            public bool Unaffect => _Unaffect;
         }
 
-        InvoiceRepository _InvoiceRepository;
-        EventAggregator _EventAggregator;
-        ExplorerClientProvider _ExplorerClientProvider;
+        readonly InvoiceRepository _InvoiceRepository;
+        readonly EventAggregator _EventAggregator;
+        readonly ExplorerClientProvider _ExplorerClientProvider;
+        private readonly NotificationSender _notificationSender;
 
         public InvoiceWatcher(
             InvoiceRepository invoiceRepository,
             EventAggregator eventAggregator,
-            ExplorerClientProvider explorerClientProvider)
+            ExplorerClientProvider explorerClientProvider,
+            NotificationSender notificationSender)
         {
             _InvoiceRepository = invoiceRepository ?? throw new ArgumentNullException(nameof(invoiceRepository));
             _EventAggregator = eventAggregator ?? throw new ArgumentNullException(nameof(eventAggregator));
             _ExplorerClientProvider = explorerClientProvider;
+            _notificationSender = notificationSender;
         }
-        CompositeDisposable leases = new CompositeDisposable();
+
+        readonly CompositeDisposable leases = new CompositeDisposable();
 
 
-        private async Task UpdateInvoice(UpdateInvoiceContext context)
+        private void UpdateInvoice(UpdateInvoiceContext context)
         {
             var invoice = context.Invoice;
-            if (invoice.Status == InvoiceStatus.New && invoice.ExpirationTime <= DateTimeOffset.UtcNow)
+            if (invoice.Status == InvoiceStatusLegacy.New && invoice.ExpirationTime <= DateTimeOffset.UtcNow)
             {
                 context.MarkDirty();
-                await _InvoiceRepository.UnaffectAddress(invoice.Id);
-
-                invoice.Status = InvoiceStatus.Expired;
-                context.Events.Add(new InvoiceEvent(invoice, 1004, InvoiceEvent.Expired));
+                context.UnaffectAddresses();
+                invoice.Status = InvoiceStatusLegacy.Expired;
+                context.Events.Add(new InvoiceEvent(invoice, InvoiceEvent.Expired));
                 if (invoice.ExceptionStatus == InvoiceExceptionStatus.PaidPartial)
-                    context.Events.Add(new InvoiceEvent(invoice, 2000, InvoiceEvent.ExpiredPaidPartial));
+                    context.Events.Add(new InvoiceEvent(invoice, InvoiceEvent.ExpiredPaidPartial));
             }
-
-            var payments = invoice.GetPayments().Where(p => p.Accounted).ToArray();
             var allPaymentMethods = invoice.GetPaymentMethods();
             var paymentMethod = GetNearestClearedPayment(allPaymentMethods, out var accounting);
             if (paymentMethod == null)
                 return;
-            if (invoice.Status == InvoiceStatus.New || invoice.Status == InvoiceStatus.Expired)
+            if (invoice.Status == InvoiceStatusLegacy.New || invoice.Status == InvoiceStatusLegacy.Expired)
             {
                 if (accounting.Paid >= accounting.MinimumTotalDue)
                 {
-                    if (invoice.Status == InvoiceStatus.New)
+                    if (invoice.Status == InvoiceStatusLegacy.New)
                     {
-                        context.Events.Add(new InvoiceEvent(invoice, 1003, InvoiceEvent.PaidInFull));
-                        invoice.Status = InvoiceStatus.Paid;
+                        context.Events.Add(new InvoiceEvent(invoice, InvoiceEvent.PaidInFull));
+                        invoice.Status = InvoiceStatusLegacy.Paid;
                         invoice.ExceptionStatus = accounting.Paid > accounting.TotalDue ? InvoiceExceptionStatus.PaidOver : InvoiceExceptionStatus.None;
-                        await _InvoiceRepository.UnaffectAddress(invoice.Id);
+                        context.UnaffectAddresses();
                         context.MarkDirty();
                     }
-                    else if (invoice.Status == InvoiceStatus.Expired && invoice.ExceptionStatus != InvoiceExceptionStatus.PaidLate)
+                    else if (invoice.Status == InvoiceStatusLegacy.Expired && invoice.ExceptionStatus != InvoiceExceptionStatus.PaidLate)
                     {
                         invoice.ExceptionStatus = InvoiceExceptionStatus.PaidLate;
-                        context.Events.Add(new InvoiceEvent(invoice, 1009, InvoiceEvent.PaidAfterExpiration));
+                        context.Events.Add(new InvoiceEvent(invoice, InvoiceEvent.PaidAfterExpiration));
                         context.MarkDirty();
                     }
                 }
@@ -98,7 +109,7 @@ namespace BTCPayServer.HostedServices
             }
 
             // Just make sure RBF did not cancelled a payment
-            if (invoice.Status == InvoiceStatus.Paid)
+            if (invoice.Status == InvoiceStatusLegacy.Paid)
             {
                 if (accounting.MinimumTotalDue <= accounting.Paid && accounting.Paid <= accounting.TotalDue && invoice.ExceptionStatus == InvoiceExceptionStatus.PaidOver)
                 {
@@ -114,13 +125,13 @@ namespace BTCPayServer.HostedServices
 
                 if (accounting.Paid < accounting.MinimumTotalDue)
                 {
-                    invoice.Status = InvoiceStatus.New;
+                    invoice.Status = InvoiceStatusLegacy.New;
                     invoice.ExceptionStatus = accounting.Paid == Money.Zero ? InvoiceExceptionStatus.None : InvoiceExceptionStatus.PaidPartial;
                     context.MarkDirty();
                 }
             }
 
-            if (invoice.Status == InvoiceStatus.Paid)
+            if (invoice.Status == InvoiceStatusLegacy.Paid)
             {
                 var confirmedAccounting = paymentMethod.Calculate(p => p.GetCryptoPaymentData().PaymentConfirmed(p, invoice.SpeedPolicy));
 
@@ -130,27 +141,27 @@ namespace BTCPayServer.HostedServices
                    // And not enough amount confirmed
                    (confirmedAccounting.Paid < accounting.MinimumTotalDue))
                 {
-                    await _InvoiceRepository.UnaffectAddress(invoice.Id);
-                    context.Events.Add(new InvoiceEvent(invoice, 1013, InvoiceEvent.FailedToConfirm));
-                    invoice.Status = InvoiceStatus.Invalid;
+                    context.UnaffectAddresses();
+                    context.Events.Add(new InvoiceEvent(invoice, InvoiceEvent.FailedToConfirm));
+                    invoice.Status = InvoiceStatusLegacy.Invalid;
                     context.MarkDirty();
                 }
                 else if (confirmedAccounting.Paid >= accounting.MinimumTotalDue)
                 {
-                    await _InvoiceRepository.UnaffectAddress(invoice.Id);
-                    invoice.Status = InvoiceStatus.Confirmed;
-                    context.Events.Add(new InvoiceEvent(invoice, 1005, InvoiceEvent.Confirmed));
+                    context.UnaffectAddresses();
+                    invoice.Status = InvoiceStatusLegacy.Confirmed;
+                    context.Events.Add(new InvoiceEvent(invoice, InvoiceEvent.Confirmed));
                     context.MarkDirty();
                 }
             }
 
-            if (invoice.Status == InvoiceStatus.Confirmed)
+            if (invoice.Status == InvoiceStatusLegacy.Confirmed)
             {
                 var completedAccounting = paymentMethod.Calculate(p => p.GetCryptoPaymentData().PaymentCompleted(p));
                 if (completedAccounting.Paid >= accounting.MinimumTotalDue)
                 {
-                    context.Events.Add(new InvoiceEvent(invoice, 1006, InvoiceEvent.Completed));
-                    invoice.Status = InvoiceStatus.Complete;
+                    context.Events.Add(new InvoiceEvent(invoice, InvoiceEvent.Completed));
+                    invoice.Status = InvoiceStatusLegacy.Complete;
                     context.MarkDirty();
                 }
             }
@@ -180,7 +191,7 @@ namespace BTCPayServer.HostedServices
         {
             if (invoiceId == null)
                 throw new ArgumentNullException(nameof(invoiceId));
-            
+
             if (!_WatchRequests.Writer.TryWrite(invoiceId))
             {
                 Logs.PayServer.LogWarning($"Failed to write invoice {invoiceId} into WatchRequests channel");
@@ -213,7 +224,7 @@ namespace BTCPayServer.HostedServices
 
         }
 
-        Channel<string> _WatchRequests = Channel.CreateUnbounded<string>();
+        readonly Channel<string> _WatchRequests = Channel.CreateUnbounded<string>();
 
         Task _Loop;
         CancellationTokenSource _Cts;
@@ -228,8 +239,13 @@ namespace BTCPayServer.HostedServices
             {
                 Watch(b.InvoiceId);
             }));
-            leases.Add(_EventAggregator.Subscribe<Events.InvoiceEvent>(b =>
+            leases.Add(_EventAggregator.Subscribe<Events.InvoiceEvent>(async b =>
             {
+                if (InvoiceEventNotification.HandlesEvent(b.Name))
+                {
+                    await _notificationSender.SendNotification(new StoreScope(b.Invoice.StoreId),
+                        new InvoiceEventNotification(b.Invoice.Id, b.Name));
+                }
                 if (b.Name == InvoiceEvent.Created)
                 {
                     Watch(b.Invoice.Id);
@@ -267,7 +283,11 @@ namespace BTCPayServer.HostedServices
                         if (invoice == null)
                             break;
                         var updateContext = new UpdateInvoiceContext(invoice);
-                        await UpdateInvoice(updateContext);
+                        UpdateInvoice(updateContext);
+                        if (updateContext.Unaffect)
+                        {
+                            await _InvoiceRepository.UnaffectAddress(invoice.Id);
+                        }
                         if (updateContext.Dirty)
                         {
                             await _InvoiceRepository.UpdateInvoiceStatus(invoice.Id, invoice.GetInvoiceState());
@@ -279,8 +299,8 @@ namespace BTCPayServer.HostedServices
                             _EventAggregator.Publish(evt, evt.GetType());
                         }
 
-                        if (invoice.Status == InvoiceStatus.Complete ||
-                           ((invoice.Status == InvoiceStatus.Invalid || invoice.Status == InvoiceStatus.Expired) && invoice.MonitoringExpiration < DateTimeOffset.UtcNow))
+                        if (invoice.Status == InvoiceStatusLegacy.Complete ||
+                           ((invoice.Status == InvoiceStatusLegacy.Invalid || invoice.Status == InvoiceStatusLegacy.Expired) && invoice.MonitoringExpiration < DateTimeOffset.UtcNow))
                         {
                             var extendInvoiceMonitoring = await UpdateConfirmationCount(invoice);
 
@@ -334,7 +354,7 @@ namespace BTCPayServer.HostedServices
                             // we want to extend invoice monitoring until we reach max confirmations on all onchain payment methods
                             if (confirmationCount < network.MaxTrackedConfirmation)
                                 extendInvoiceMonitoring = true;
-                            
+
                             return payment;
                         }
                     }

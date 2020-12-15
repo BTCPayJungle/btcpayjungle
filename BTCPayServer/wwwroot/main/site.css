@@ -3,6 +3,8 @@ html {
     position: relative;
     min-height: 100%;
     font-size: var(--btcpay-font-size-base);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .logo {
@@ -47,6 +49,23 @@ a {
     transition-property: background, color;
 }
 
+ol {
+   padding-left: 1.125em;
+}
+
+ul {
+    padding-left: 1em;
+}
+
+ul li {
+    padding-top: .2em;
+    padding-bottom: .2em;
+}
+
+.bg-tile {
+    background-color: var(--btcpay-bg-tile);
+}
+
 .navbar .onion {
     margin-right: auto;
 }
@@ -61,6 +80,11 @@ a {
     color: inherit;
     border-color: inherit;
     opacity: .5;
+}
+
+.dropdown-toggle-split,
+.dropdown-toggle-split:hover {
+    border-left: 1px solid var(--btcpay-color-white);
 }
 
 /* Admin Sidebar Navigation */
@@ -85,10 +109,6 @@ a.nav-link:hover {
     background: var(--btcpay-bg-nav-link-active, var(--btcpay-color-primary-backdrop));
     font-weight: 500;
     border-left: 5px solid var(--btcpay-color-primary);
-}
-
-.display-when-ledger-connected {
-    display: none;
 }
 
 /* Homepage */
@@ -162,13 +182,178 @@ pre {
     background-color: lightgray;
 }
 
-[v-cloak] > * { display:none }
-[v-cloak]::before { content: "loading…" }
+/* Fix for small table showing unnecessary scrollbars */
+.table-responsive .table-sm {
+    width: 100% !important;
+}
+
+[v-cloak] { display:none }
+[v-cloak-loading] > * { display:none }
+[v-cloak-loading]::before { content: "loading…" }
 
 .cursor-pointer{
     cursor: pointer;
 }
 
-.list-group-item a {
+.list-group-item a:not(.btn) {
   color: inherit;
+}
+
+.alerts-badge {
+  position: absolute;
+  margin-top: -36px;
+  margin-left: 16px;
+}
+
+.alert hr {
+    display: block;
+    width: unset;
+    height: 1px;
+    background: none;
+}
+
+.account-form {
+    max-width: 36em;
+}
+
+.content-wrapper {
+    padding: 50px 0;
+}
+
+@media screen and (min-width: 768px) {
+    .content-wrapper {
+        padding: 75px 0;
+    }
+}
+
+.btn-outline-onion {
+    background-image: none;
+    background-color: transparent;
+    border: 0;
+}
+
+.btn-outline-onion:hover {
+    color: #fff;
+    background-color: #7D4698;
+}
+
+.btn-outline-onion:focus,
+.btn-outline-onion.focus {
+    color: #fff;
+    background-color: #7D4698;
+    box-shadow: 0 0 0 0.2rem #e6d5ee;
+}
+
+.btn-outline-onion:hover img,
+.btn-outline-onion:focus img,
+.btn-outline-onion.focus img {
+    filter: contrast(0) brightness(200%);
+}
+
+[class*="field-validation"]:not(:empty) {
+    display: inline-block;
+    margin-top: .5rem;
+}
+
+.w-100px { width: 100px; }
+.w-125px { width: 125px; }
+.w-150px { width: 150px; }
+.w-175px { width: 175px; }
+.w-200px { width: 200px; }
+
+.fw-semibold {
+    font-weight: 600;
+}
+
+/* Chrome, Safari, Edge, Opera */
+input[type=number].hide-number-spin::-webkit-outer-spin-button,
+input[type=number].hide-number-spin::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Firefox */
+input[type=number].hide-number-spin {
+    -moz-appearance: textfield;
+}
+
+/* Bootstrap Responsive Helper */
+html[data-devenv]:before {
+    display: inline-block;
+    position: fixed;
+    z-index: 1000;
+    right: 0;
+    bottom: 0;
+    background: var(--btcpay-color-secondary-backdrop);
+    color: var(--btcpay-color-secondary-text);
+    opacity: .7;
+    padding: 4px 5px 3px 7px;
+    font-size: 10px;
+    border-top-left-radius: 4px;
+}
+
+@media (max-width: 575px) { html[data-devenv]:before { content: 'XS'; } }
+@media (min-width: 576px) and (max-width: 767px) { html[data-devenv]:before { content: 'SM'; } }
+@media (min-width: 768px) and (max-width: 991px) { html[data-devenv]:before { content: 'MD'; } }
+@media (min-width: 992px) and (max-width: 1199px) { html[data-devenv]:before { content: 'LG'; } }
+@media (min-width: 1200px) { html[data-devenv]:before { content: 'XL'; } }
+@media print { html[data-devenv]:before { content: none; } }
+
+/* Print */
+@media print {
+    .table td,
+    .table th {
+        background: transparent;
+    }
+    .jumbotron {
+        padding: 1rem 0 !important;
+    }
+    .text-print-default {
+        color: inherit !important;
+    }
+    a {
+        text-decoration: none !important;
+    }
+    .toasted-container {
+        display: none !important;
+    }
+}
+
+/* Richtext editor */
+.note-editor .table.table-sm {
+    border-collapse: collapse !important;
+}
+
+.note-editor .table.table-sm th,
+.note-editor .table.table-sm td {
+    border: 1px dotted var(--btcpay-color-neutral-400);
+}
+
+/* Custom */
+.btcpay-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: .25em solid transparent;
+    border-radius: 50%;
+    width: 19px;
+    height: 19px;
+}
+.btcpay-status:before {
+    content: '';
+    border-radius: 50%;
+    width: 9px;
+    height: 9px;
+}
+.btcpay-status--enabled {
+    background-color: rgba(0, 182, 52, .3);
+}
+.btcpay-status--enabled:before {
+    background-color: #00B634;
+}
+.btcpay-status--disabled {
+    background-color: rgba(251, 56, 61, .3);
+}
+.btcpay-status--disabled:before {
+    background-color: #FB383D;
 }

@@ -1,29 +1,30 @@
-﻿using Microsoft.AspNetCore.Http;
+using System;
+using System.Linq;
+using System.Net.WebSockets;
+using System.Threading.Tasks;
+using BTCPayServer.Configuration;
+using BTCPayServer.Logging;
+using BTCPayServer.Models;
+using BTCPayServer.Services;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Primitives;
-using System;
-using System.Collections.Generic;
-using System.Text;
-using System.Linq;
-using System.Threading.Tasks;
-using System.IO;
-using BTCPayServer.Logging;
 using Newtonsoft.Json;
-using BTCPayServer.Models;
-using BTCPayServer.Configuration;
-using System.Net.WebSockets;
-using BTCPayServer.Services.Stores;
 
 namespace BTCPayServer.Hosting
 {
     public class BTCPayMiddleware
     {
-        RequestDelegate _Next;
-        BTCPayServerOptions _Options;
+        readonly RequestDelegate _Next;
+        readonly BTCPayServerOptions _Options;
+        readonly BTCPayServerEnvironment _Env;
 
         public BTCPayMiddleware(RequestDelegate next,
-            BTCPayServerOptions options)
+            BTCPayServerOptions options,
+            BTCPayServerEnvironment env)
         {
+            _Env = env ?? throw new ArgumentNullException(nameof(env));
             _Next = next ?? throw new ArgumentNullException(nameof(next));
             _Options = options ?? throw new ArgumentNullException(nameof(options));
         }
@@ -55,6 +56,12 @@ namespace BTCPayServer.Hosting
                 {
                     await _Next(httpContext);
                     return;
+                }
+
+                if (!httpContext.Request.IsOnion() && (httpContext.Request.Headers["Accept"].ToString().StartsWith("text/html", StringComparison.InvariantCulture)))
+                {
+                    var onionLocation = _Env.OnionUrl + httpContext.Request.GetEncodedPathAndQuery();
+                    httpContext.Response.SetHeader("Onion-Location", onionLocation);
                 }
             }
             catch (WebSocketException)

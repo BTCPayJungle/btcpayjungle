@@ -1,31 +1,26 @@
 using System;
-using BTCPayServer;
-using System.Linq;
-using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
-using System.Runtime.CompilerServices;
-using System.Text;
-using NBitcoin;
-using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome;
-using Xunit;
 using System.IO;
-using System.Net.Http;
-using System.Reflection;
-using BTCPayServer.Tests.Logging;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using BTCPayServer;
+using BTCPayServer.Abstractions.Models;
 using BTCPayServer.Lightning;
 using BTCPayServer.Lightning.CLightning;
 using BTCPayServer.Models;
 using BTCPayServer.Services;
+using BTCPayServer.Tests.Logging;
 using BTCPayServer.Views.Manage;
+using BTCPayServer.Views.Server;
 using BTCPayServer.Views.Stores;
 using BTCPayServer.Views.Wallets;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using NBitcoin;
+using OpenQA.Selenium;
+using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Interactions;
+using Xunit;
 
 namespace BTCPayServer.Tests
 {
@@ -48,18 +43,19 @@ namespace BTCPayServer.Tests
         {
             await Server.StartAsync();
             ChromeOptions options = new ChromeOptions();
-            var isDebug = !Server.PayTester.InContainer;
+            if (Server.PayTester.InContainer)
+            {
+                // this must be first option https://stackoverflow.com/questions/53073411/selenium-webdriverexceptionchrome-failed-to-start-crashed-as-google-chrome-is#comment102570662_53073789
+                options.AddArgument("no-sandbox");
+            }
 
+            var isDebug = !Server.PayTester.InContainer;
             if (!isDebug)
             {
                 options.AddArguments("headless"); // Comment to view browser
                 options.AddArguments("window-size=1200x1000"); // Comment to view browser
             }
             options.AddArgument("shm-size=2g");
-            if (Server.PayTester.InContainer)
-            {
-                options.AddArgument("no-sandbox");
-            }
             Driver = new ChromeDriver(Server.PayTester.InContainer ? "/usr/bin" : Directory.GetCurrentDirectory(), options);
             if (isDebug)
             {
@@ -87,7 +83,7 @@ namespace BTCPayServer.Tests
             Logs.Tester.LogInformation(this.Driver.PageSource);
             Assert.True(false, $"Should have shown {severity} message");
             return null;
-         }
+        }
 
         public static readonly TimeSpan ImplicitWait = TimeSpan.FromSeconds(10);
         public string Link(string relativeLink)
@@ -102,6 +98,7 @@ namespace BTCPayServer.Tests
         public string RegisterNewUser(bool isAdmin = false)
         {
             var usr = RandomUtils.GetUInt256().ToString().Substring(64 - 20) + "@a.com";
+            Logs.Tester.LogInformation($"User: {usr} with password 123456");
             Driver.FindElement(By.Id("Email")).SendKeys(usr);
             Driver.FindElement(By.Id("Password")).SendKeys("123456");
             Driver.FindElement(By.Id("ConfirmPassword")).SendKeys("123456");
@@ -119,10 +116,10 @@ namespace BTCPayServer.Tests
             Driver.FindElement(By.Id("CreateStore")).Click();
             Driver.FindElement(By.Id("Name")).SendKeys(usr);
             Driver.FindElement(By.Id("Create")).Click();
-
-            return (usr, Driver.FindElement(By.Id("Id")).GetAttribute("value"));
+            StoreId = Driver.FindElement(By.Id("Id")).GetAttribute("value");
+            return (usr, StoreId);
         }
-        
+        public string StoreId { get; set; }
 
         public Mnemonic GenerateWallet(string cryptoCode = "BTC", string seed = "", bool importkeys = false, bool privkeys = false, ScriptPubKeyType format = ScriptPubKeyType.Segwit)
         {
@@ -136,14 +133,20 @@ namespace BTCPayServer.Tests
             Driver.WaitForElement(By.CssSelector($"#ScriptPubKeyType option[value={format}]")).Click();
             Logs.Tester.LogInformation("Trying to click btn-generate");
             Driver.WaitForElement(By.Id("btn-generate")).ForceClick();
+            // Seed backup page
             AssertHappyMessage();
             if (string.IsNullOrEmpty(seed))
             {
-                seed = Driver.FindElements(By.ClassName("alert-success")).First().FindElement(By.TagName("code")).Text;
+                seed = Driver.FindElements(By.Id("recovery-phrase")).First().GetAttribute("data-mnemonic");
             }
+            // Confirm seed backup
+            Driver.FindElement(By.Id("confirm")).Click();
+            Driver.FindElement(By.Id("submit")).Click();
+
+            WalletId = new WalletId(StoreId, cryptoCode);
             return new Mnemonic(seed);
         }
-
+        public WalletId WalletId { get; set; }
         public void AddDerivationScheme(string cryptoCode = "BTC", string derivationScheme = "xpub661MyMwAqRbcGABgHMUXDzPzH1tU7eZaAaJQXhDXsSxsqyQzQeU6kznNfSuAyqAK9UaWSaZaMFdNiY5BCF4zBPAzSnwfUAwUhwttuAKwfRX-[legacy]")
         {
             Driver.FindElement(By.Id($"Modify{cryptoCode}")).ForceClick();
@@ -157,7 +160,7 @@ namespace BTCPayServer.Tests
         {
             string connectionString = null;
             if (connectionType == LightningConnectionType.Charge)
-                connectionString = "type=charge;server=" + Server.MerchantCharge.Client.Uri.AbsoluteUri;
+                connectionString = $"type=charge;server={Server.MerchantCharge.Client.Uri.AbsoluteUri};allowinsecure=true";
             else if (connectionType == LightningConnectionType.CLightning)
                 connectionString = "type=clightning;server=" + ((CLightningClient)Server.MerchantLightningD).Address.AbsoluteUri;
             else if (connectionType == LightningConnectionType.LndREST)
@@ -227,7 +230,11 @@ namespace BTCPayServer.Tests
             Driver.FindElement(By.Id("Email")).SendKeys(user);
             Driver.FindElement(By.Id("Password")).SendKeys(password);
             Driver.FindElement(By.Id("LoginButton")).Click();
+        }
 
+        public void GoToStores()
+        {
+            Driver.FindElement(By.Id("Stores")).Click();
         }
 
         public void GoToStore(string storeId, StoreNavPages storeNavPage = StoreNavPages.Index)
@@ -278,8 +285,8 @@ namespace BTCPayServer.Tests
         {
             Driver.FindElement(By.Id("Invoices")).Click();
         }
-        
-        public void GoToProfile(ManageNavPages navPages =  ManageNavPages.Index)
+
+        public void GoToProfile(ManageNavPages navPages = ManageNavPages.Index)
         {
             Driver.FindElement(By.Id("MySettings")).Click();
             if (navPages != ManageNavPages.Index)
@@ -302,23 +309,24 @@ namespace BTCPayServer.Tests
         public string CreateInvoice(string storeName, decimal amount = 100, string currency = "USD", string refundEmail = "")
         {
             GoToInvoices();
-            Driver.FindElement(By.Id("CreateNewInvoice")).Click();
+            Driver.FindElement(By.Id("CreateNewInvoice")).Click(); // ocassionally gets stuck for some reason, tried force click and wait for element
             Driver.FindElement(By.Id("Amount")).SendKeys(amount.ToString(CultureInfo.InvariantCulture));
             var currencyEl = Driver.FindElement(By.Id("Currency"));
             currencyEl.Clear();
             currencyEl.SendKeys(currency);
             Driver.FindElement(By.Id("BuyerEmail")).SendKeys(refundEmail);
-            Driver.FindElement(By.Name("StoreId")).SendKeys(storeName + Keys.Enter);
-            Driver.FindElement(By.Id("Create")).ForceClick();
-            Assert.True(Driver.PageSource.Contains("just created!"), "Unable to create Invoice");
+            Driver.FindElement(By.Name("StoreId")).SendKeys(storeName);
+            Driver.FindElement(By.Id("Create")).Click();
+
+            AssertHappyMessage();
             var statusElement = Driver.FindElement(By.ClassName("alert-success"));
             var id = statusElement.Text.Split(" ")[1];
-
             return id;
         }
 
-        public async Task FundStoreWallet(WalletId walletId, int coins = 1, decimal denomination = 1m)
+        public async Task FundStoreWallet(WalletId walletId = null, int coins = 1, decimal denomination = 1m)
         {
+            walletId ??= WalletId;
             GoToWallet(walletId, WalletsNavPages.Receive);
             Driver.FindElement(By.Id("generateButton")).Click();
             var addressStr = Driver.FindElement(By.Id("vue-address")).GetProperty("value");
@@ -328,14 +336,14 @@ namespace BTCPayServer.Tests
                 await Server.ExplorerNode.SendToAddressAsync(address, Money.Coins(denomination));
             }
         }
-        
+
         public void PayInvoice(WalletId walletId, string invoiceId)
         {
             GoToInvoiceCheckout(invoiceId);
             var bip21 = Driver.FindElement(By.ClassName("payment__details__instruction__open-wallet__btn"))
                 .GetAttribute("href");
             Assert.Contains($"{PayjoinClient.BIP21EndpointKey}", bip21);
-               
+
             GoToWallet(walletId, WalletsNavPages.Send);
             Driver.FindElement(By.Id("bip21parse")).Click();
             Driver.SwitchTo().Alert().SendKeys(bip21);
@@ -347,7 +355,7 @@ namespace BTCPayServer.Tests
         }
 
 
-        
+
 
         private void CheckForJSErrors()
         {
@@ -372,12 +380,41 @@ namespace BTCPayServer.Tests
 
         }
 
-        public void GoToWallet(WalletId walletId, WalletsNavPages navPages = WalletsNavPages.Send)
+        public void GoToWallet(WalletId walletId = null, WalletsNavPages navPages = WalletsNavPages.Send)
         {
+            walletId ??= WalletId;
             Driver.Navigate().GoToUrl(new Uri(Server.PayTester.ServerUri, $"wallets/{walletId}"));
             if (navPages != WalletsNavPages.Transactions)
             {
                 Driver.FindElement(By.Id($"Wallet{navPages}")).Click();
+            }
+        }
+
+        public void GoToUrl(string relativeUrl)
+        {
+            Driver.Navigate().GoToUrl(new Uri(Server.PayTester.ServerUri, relativeUrl));
+        }
+        
+        public void GoToServer(ServerNavPages navPages = ServerNavPages.Index)
+        {
+            Driver.FindElement(By.Id("ServerSettings")).Click();
+            if (navPages != ServerNavPages.Index)
+            {
+                Driver.FindElement(By.Id($"Server-{navPages}")).Click();
+            }
+
+        }
+
+        public void GoToInvoice(string id)
+        {
+            GoToInvoices();
+            foreach (var el in Driver.FindElements(By.ClassName("invoice-details-link")))
+            {
+                if (el.GetAttribute("href").Contains(id, StringComparison.OrdinalIgnoreCase))
+                {
+                    el.Click();
+                    break;
+                }
             }
         }
     }

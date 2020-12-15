@@ -1,19 +1,17 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Threading.Tasks;
 using BTCPayServer.Data;
 using BTCPayServer.Filters;
-using BTCPayServer.Lightning;
-using BTCPayServer.Models.StoreViewModels;
 using BTCPayServer.Payments;
 using BTCPayServer.Payments.Lightning;
 using BTCPayServer.Services.Stores;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace BTCPayServer.Controllers
 {
-    
+
     [Route("embed/{storeId}/{cryptoCode}/ln")]
     [AllowAnonymous]
     public class PublicLightningNodeInfoController : Controller
@@ -22,14 +20,14 @@ namespace BTCPayServer.Controllers
         private readonly LightningLikePaymentHandler _LightningLikePaymentHandler;
         private readonly StoreRepository _StoreRepository;
 
-        public PublicLightningNodeInfoController(BTCPayNetworkProvider btcPayNetworkProvider, 
+        public PublicLightningNodeInfoController(BTCPayNetworkProvider btcPayNetworkProvider,
             LightningLikePaymentHandler lightningLikePaymentHandler, StoreRepository storeRepository)
         {
             _BtcPayNetworkProvider = btcPayNetworkProvider;
             _LightningLikePaymentHandler = lightningLikePaymentHandler;
             _StoreRepository = storeRepository;
         }
-        
+
         [HttpGet]
         [XFrameOptions(XFrameOptionsAttribute.XFrameOptions.AllowAll)]
         public async Task<IActionResult> ShowLightningNodeInfo(string storeId, string cryptoCode)
@@ -43,23 +41,24 @@ namespace BTCPayServer.Controllers
                 var paymentMethodDetails = GetExistingLightningSupportedPaymentMethod(cryptoCode, store);
                 var network = _BtcPayNetworkProvider.GetNetwork<BTCPayNetwork>(cryptoCode);
                 var nodeInfo =
-                    await _LightningLikePaymentHandler.GetNodeInfo(this.Request.IsOnion(), paymentMethodDetails,
+                    await _LightningLikePaymentHandler.GetNodeInfo(Request.IsOnion(), paymentMethodDetails,
                         network);
 
-                return View(new ShowLightningNodeInfoViewModel()
+                return View(new ShowLightningNodeInfoViewModel
                 {
                     Available = true,
                     NodeInfo = nodeInfo.ToString(),
                     CryptoCode = cryptoCode,
-                    CryptoImage = GetImage(paymentMethodDetails.PaymentId, network)
+                    CryptoImage = GetImage(paymentMethodDetails.PaymentId, network),
+                    StoreName = store.StoreName
                 });
             }
             catch (Exception)
             {
-                return View(new ShowLightningNodeInfoViewModel() {Available = false, CryptoCode = cryptoCode});
+                return View(new ShowLightningNodeInfoViewModel { Available = false, CryptoCode = cryptoCode });
             }
         }
-        
+
         private LightningSupportedPaymentMethod GetExistingLightningSupportedPaymentMethod(string cryptoCode, StoreData store)
         {
             var id = new PaymentMethodId(cryptoCode, PaymentTypes.LightningLike);
@@ -85,5 +84,6 @@ namespace BTCPayServer.Controllers
         public bool Available { get; set; }
         public string CryptoCode { get; set; }
         public string CryptoImage { get; set; }
+        public string StoreName { get; set; }
     }
 }

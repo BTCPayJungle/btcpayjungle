@@ -1,6 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
-using System.Security.Claims;
 using System.Threading.Tasks;
 using BTCPayServer.Client;
 using BTCPayServer.Data;
@@ -32,50 +30,56 @@ namespace BTCPayServer.Security.GreenField
         {
             if (context.User.Identity.AuthenticationType != GreenFieldConstants.AuthenticationType)
                 return;
-
+            var userid = _userManager.GetUserId(context.User);
             bool success = false;
-            switch (requirement.Policy)
+            var policy = requirement.Policy;
+            var requiredUnscoped = false;
+            if (policy.EndsWith(':'))
             {
-                case Policies.CanModifyProfile:
-                case Policies.CanViewProfile:
-                case Policies.Unrestricted:
-                    success = context.HasPermission(Permission.Create(requirement.Policy));
-                    break;
+                policy = policy.Substring(0, policy.Length - 1);
+                requiredUnscoped = true;
+            }
 
-                case Policies.CanViewStoreSettings:
-                case Policies.CanModifyStoreSettings:
+            switch (policy)
+            {
+                case { } when Policies.IsStorePolicy(policy):
                     var storeId = _HttpContext.GetImplicitStoreId();
-                    var userid = _userManager.GetUserId(context.User);
                     // Specific store action
                     if (storeId != null)
                     {
-                        if (context.HasPermission(Permission.Create(requirement.Policy, storeId)))
+                        if (context.HasPermission(Permission.Create(policy, storeId), requiredUnscoped))
                         {
                             if (string.IsNullOrEmpty(userid))
                                 break;
-                            var store = await _storeRepository.FindStore((string)storeId, userid);
+                            var store = await _storeRepository.FindStore(storeId, userid);
                             if (store == null)
                                 break;
+                            if (Policies.IsStoreModifyPolicy(policy) || policy == Policies.CanUseLightningNodeInStore)
+                            {
+                                if (store.Role != StoreRoles.Owner)
+                                    break;
+                            }
                             success = true;
                             _HttpContext.SetStoreData(store);
                         }
                     }
                     else
                     {
+                        if (requiredUnscoped && !context.HasPermission(Permission.Create(policy)))
+                            break;
                         var stores = await _storeRepository.GetStoresByUserId(userid);
                         List<StoreData> permissionedStores = new List<StoreData>();
                         foreach (var store in stores)
                         {
-                            if (context.HasPermission(Permission.Create(requirement.Policy, store.Id)))
+                            if (context.HasPermission(Permission.Create(policy, store.Id), requiredUnscoped))
                                 permissionedStores.Add(store);
                         }
                         _HttpContext.SetStoresData(permissionedStores.ToArray());
                         success = true;
                     }
                     break;
-                case Policies.CanCreateUser:
-                case Policies.CanModifyServerSettings:
-                    if (context.HasPermission(Permission.Create(requirement.Policy)))
+                case { } when Policies.IsServerPolicy(policy):
+                    if (context.HasPermission(Permission.Create(policy)))
                     {
                         var user = await _userManager.GetUserAsync(context.User);
                         if (user == null)
@@ -84,6 +88,13 @@ namespace BTCPayServer.Security.GreenField
                             break;
                         success = true;
                     }
+                    break;
+                case Policies.CanManageNotificationsForUser:
+                case Policies.CanViewNotificationsForUser:
+                case Policies.CanModifyProfile:
+                case Policies.CanViewProfile:
+                case Policies.Unrestricted:
+                    success = context.HasPermission(Permission.Create(policy), requiredUnscoped);
                     break;
             }
 

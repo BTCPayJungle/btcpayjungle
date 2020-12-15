@@ -1,15 +1,16 @@
-﻿using BTCPayServer.Logging;
-using System.Linq;
-using Microsoft.Extensions.Logging;
-using NBitcoin;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
-using Microsoft.Extensions.Configuration;
-using BTCPayServer.SSH;
 using BTCPayServer.Lightning;
+using BTCPayServer.Logging;
+using BTCPayServer.SSH;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using NBitcoin;
 using Serilog.Events;
+using TwentyTwenty.Storage;
 
 namespace BTCPayServer.Configuration
 {
@@ -43,7 +44,7 @@ namespace BTCPayServer.Configuration
             private set;
         }
         public EndPoint SocksEndpoint { get; set; }
-        
+
         public List<NBXplorerConnectionSetting> NBXplorerConnectionSettings
         {
             get;
@@ -79,6 +80,7 @@ namespace BTCPayServer.Configuration
         {
             NetworkType = DefaultConfiguration.GetNetworkType(conf);
             DataDir = conf.GetDataDir(NetworkType);
+            PluginDir = conf.GetPluginDir(NetworkType);
             Logs.Configuration.LogInformation("Network: " + NetworkType.ToString());
 
             if (conf.GetOrDefault<bool>("launchsettings", false) && NetworkType != NetworkType.Regtest)
@@ -90,11 +92,15 @@ namespace BTCPayServer.Configuration
 
             var networkProvider = new BTCPayNetworkProvider(NetworkType);
             var filtered = networkProvider.Filter(supportedChains.ToArray());
-            var elementsBased = filtered.GetAll().OfType<ElementsBTCPayNetwork>();
-            var parentChains = elementsBased.Select(network => network.NetworkCryptoCode.ToUpperInvariant()).Distinct();
-            var allSubChains = networkProvider.GetAll().OfType<ElementsBTCPayNetwork>()
-                .Where(network => parentChains.Contains(network.NetworkCryptoCode)).Select(network => network.CryptoCode.ToUpperInvariant());
-            supportedChains.AddRange(allSubChains);
+#if ALTCOINS
+            supportedChains.AddRange(filtered.GetAllElementsSubChains(networkProvider));
+            supportedChains.AddRange(filtered.GetAllEthereumSubChains(networkProvider));
+#endif
+#if !ALTCOINS
+            var onlyBTC = supportedChains.Count == 1 && supportedChains.First() == "BTC";
+            if (!onlyBTC)
+                throw new ConfigException($"This build of BTCPay Server does not support altcoins");
+#endif
             NetworkProvider = networkProvider.Filter(supportedChains.ToArray());
             foreach (var chain in supportedChains)
             {
@@ -150,7 +156,7 @@ namespace BTCPayServer.Configuration
                 foreach (var service in services.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries)
                                                 .Select(p => (p, SeparatorIndex: p.IndexOf(':', StringComparison.OrdinalIgnoreCase)))
                                                 .Where(p => p.SeparatorIndex != -1)
-                                                .Select(p => (Name: p.p.Substring(0, p.SeparatorIndex), 
+                                                .Select(p => (Name: p.p.Substring(0, p.SeparatorIndex),
                                                               Link: p.p.Substring(p.SeparatorIndex + 1))))
                 {
                     if (Uri.TryCreate(service.Link, UriKind.RelativeOrAbsolute, out var uri))
@@ -160,18 +166,22 @@ namespace BTCPayServer.Configuration
 
             PostgresConnectionString = conf.GetOrDefault<string>("postgres", null);
             MySQLConnectionString = conf.GetOrDefault<string>("mysql", null);
+            SQLiteFileName = conf.GetOrDefault<string>("sqlitefile", null);
+            
             BundleJsCss = conf.GetOrDefault<bool>("bundlejscss", true);
+            DockerDeployment = conf.GetOrDefault<bool>("dockerdeployment", true);
             AllowAdminRegistration = conf.GetOrDefault<bool>("allow-admin-registration", false);
             TorrcFile = conf.GetOrDefault<string>("torrcfile", null);
 
             var socksEndpointString = conf.GetOrDefault<string>("socksendpoint", null);
-            if(!string.IsNullOrEmpty(socksEndpointString))
+            if (!string.IsNullOrEmpty(socksEndpointString))
             {
                 if (!Utils.TryParseEndpoint(socksEndpointString, 9050, out var endpoint))
                     throw new ConfigException("Invalid value for socksendpoint");
                 SocksEndpoint = endpoint;
             }
-            
+
+            UpdateUrl = conf.GetOrDefault<Uri>("updateurl", null);
 
             var sshSettings = ParseSSHConfiguration(conf);
             if ((!string.IsNullOrEmpty(sshSettings.Password) || !string.IsNullOrEmpty(sshSettings.KeyFile)) && !string.IsNullOrEmpty(sshSettings.Server))
@@ -231,7 +241,13 @@ namespace BTCPayServer.Configuration
             }
 
             DisableRegistration = conf.GetOrDefault<bool>("disable-registration", true);
+            PluginRemote = conf.GetOrDefault("plugin-remote", "btcpayserver/btcpayserver-plugins");
+            RecommendedPlugins = conf.GetOrDefault("recommended-plugins", "").ToLowerInvariant().Split('\r','\n','\t',' ').Where(s => !string.IsNullOrEmpty(s)).Distinct().ToArray();
         }
+
+        public string PluginDir { get; set; }
+        public string PluginRemote { get; set; }
+        public string[] RecommendedPlugins { get; set; }
 
         private SSHSettings ParseSSHConfiguration(IConfiguration conf)
         {
@@ -275,12 +291,18 @@ namespace BTCPayServer.Configuration
         public ExternalServices ExternalServices { get; set; } = new ExternalServices();
 
         public BTCPayNetworkProvider NetworkProvider { get; set; }
+        public bool DockerDeployment { get; set; }
         public string PostgresConnectionString
         {
             get;
             set;
         }
         public string MySQLConnectionString
+        {
+            get;
+            set;
+        }
+        public string SQLiteFileName
         {
             get;
             set;
@@ -297,5 +319,6 @@ namespace BTCPayServer.Configuration
             set;
         }
         public string TorrcFile { get; set; }
+        public Uri UpdateUrl { get; set; }
     }
 }
