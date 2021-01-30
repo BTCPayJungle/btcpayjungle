@@ -1,26 +1,16 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net;
-using BTCPayServer.Lightning;
 using BTCPayServer.Logging;
 using BTCPayServer.SSH;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using NBitcoin;
 using Serilog.Events;
-using TwentyTwenty.Storage;
 
 namespace BTCPayServer.Configuration
 {
-    public class NBXplorerConnectionSetting
-    {
-        public string CryptoCode { get; internal set; }
-        public Uri ExplorerUri { get; internal set; }
-        public string CookieFile { get; internal set; }
-    }
-
     public class BTCPayServerOptions
     {
         public NetworkType NetworkType
@@ -38,18 +28,8 @@ namespace BTCPayServer.Configuration
             get;
             private set;
         }
-        public string DataDir
-        {
-            get;
-            private set;
-        }
         public EndPoint SocksEndpoint { get; set; }
 
-        public List<NBXplorerConnectionSetting> NBXplorerConnectionSettings
-        {
-            get;
-            set;
-        } = new List<NBXplorerConnectionSetting>();
 
         public bool DisableRegistration
         {
@@ -64,8 +44,7 @@ namespace BTCPayServer.Configuration
             {
                 if (!Path.IsPathRooted(logfile))
                 {
-                    var networkType = DefaultConfiguration.GetNetworkType(configuration);
-                    logfile = Path.Combine(configuration.GetDataDir(networkType), logfile);
+                    logfile = Path.Combine(new DataDirectories().Configure(configuration).DataDir, logfile);
                 }
             }
             return logfile;
@@ -79,94 +58,13 @@ namespace BTCPayServer.Configuration
         public void LoadArgs(IConfiguration conf)
         {
             NetworkType = DefaultConfiguration.GetNetworkType(conf);
-            DataDir = conf.GetDataDir(NetworkType);
-            PluginDir = conf.GetPluginDir(NetworkType);
+            
             Logs.Configuration.LogInformation("Network: " + NetworkType.ToString());
 
             if (conf.GetOrDefault<bool>("launchsettings", false) && NetworkType != NetworkType.Regtest)
                 throw new ConfigException($"You need to run BTCPayServer with the run.sh or run.ps1 script");
 
-            var supportedChains = conf.GetOrDefault<string>("chains", "btc")
-                .Split(',', StringSplitOptions.RemoveEmptyEntries)
-                .Select(t => t.ToUpperInvariant()).ToHashSet();
-
-            var networkProvider = new BTCPayNetworkProvider(NetworkType);
-            var filtered = networkProvider.Filter(supportedChains.ToArray());
-#if ALTCOINS
-            supportedChains.AddRange(filtered.GetAllElementsSubChains(networkProvider));
-            supportedChains.AddRange(filtered.GetAllEthereumSubChains(networkProvider));
-#endif
-#if !ALTCOINS
-            var onlyBTC = supportedChains.Count == 1 && supportedChains.First() == "BTC";
-            if (!onlyBTC)
-                throw new ConfigException($"This build of BTCPay Server does not support altcoins");
-#endif
-            NetworkProvider = networkProvider.Filter(supportedChains.ToArray());
-            foreach (var chain in supportedChains)
-            {
-                if (NetworkProvider.GetNetwork<BTCPayNetworkBase>(chain) == null)
-                    throw new ConfigException($"Invalid chains \"{chain}\"");
-            }
-
-            var validChains = new List<string>();
-            foreach (var net in NetworkProvider.GetAll().OfType<BTCPayNetwork>())
-            {
-                NBXplorerConnectionSetting setting = new NBXplorerConnectionSetting();
-                setting.CryptoCode = net.CryptoCode;
-                setting.ExplorerUri = conf.GetOrDefault<Uri>($"{net.CryptoCode}.explorer.url", net.NBXplorerNetwork.DefaultSettings.DefaultUrl);
-                setting.CookieFile = conf.GetOrDefault<string>($"{net.CryptoCode}.explorer.cookiefile", net.NBXplorerNetwork.DefaultSettings.DefaultCookieFile);
-                NBXplorerConnectionSettings.Add(setting);
-
-                {
-                    var lightning = conf.GetOrDefault<string>($"{net.CryptoCode}.lightning", string.Empty);
-                    if (lightning.Length != 0)
-                    {
-                        if (!LightningConnectionString.TryParse(lightning, true, out var connectionString, out var error))
-                        {
-                            Logs.Configuration.LogWarning($"Invalid setting {net.CryptoCode}.lightning, " + Environment.NewLine +
-                                $"If you have a c-lightning server use: 'type=clightning;server=/root/.lightning/lightning-rpc', " + Environment.NewLine +
-                                $"If you have a lightning charge server: 'type=charge;server=https://charge.example.com;api-token=yourapitoken'" + Environment.NewLine +
-                                $"If you have a lnd server: 'type=lnd-rest;server=https://lnd:lnd@lnd.example.com;macaroon=abf239...;certthumbprint=2abdf302...'" + Environment.NewLine +
-                                $"              lnd server: 'type=lnd-rest;server=https://lnd:lnd@lnd.example.com;macaroonfilepath=/root/.lnd/admin.macaroon;certthumbprint=2abdf302...'" + Environment.NewLine +
-                                $"If you have an eclair server: 'type=eclair;server=http://eclair.com:4570;password=eclairpassword;bitcoin-host=bitcoind:37393;bitcoin-auth=bitcoinrpcuser:bitcoinrpcpassword" + Environment.NewLine +
-                                $"               eclair server: 'type=eclair;server=http://eclair.com:4570;password=eclairpassword;bitcoin-host=bitcoind:37393" + Environment.NewLine +
-                                $"Error: {error}" + Environment.NewLine +
-                                "This service will not be exposed through BTCPay Server");
-                        }
-                        else
-                        {
-                            if (connectionString.IsLegacy)
-                            {
-                                Logs.Configuration.LogWarning($"Setting {net.CryptoCode}.lightning is a deprecated format, it will work now, but please replace it for future versions with '{connectionString.ToString()}'");
-                            }
-                            InternalLightningByCryptoCode.Add(net.CryptoCode, connectionString);
-                        }
-                    }
-                }
-
-                ExternalServices.Load(net.CryptoCode, conf);
-            }
-
-            ExternalServices.LoadNonCryptoServices(conf);
-            Logs.Configuration.LogInformation("Supported chains: " + String.Join(',', supportedChains.ToArray()));
-
-            var services = conf.GetOrDefault<string>("externalservices", null);
-            if (services != null)
-            {
-                foreach (var service in services.Split(new[] { ';', ',' }, StringSplitOptions.RemoveEmptyEntries)
-                                                .Select(p => (p, SeparatorIndex: p.IndexOf(':', StringComparison.OrdinalIgnoreCase)))
-                                                .Where(p => p.SeparatorIndex != -1)
-                                                .Select(p => (Name: p.p.Substring(0, p.SeparatorIndex),
-                                                              Link: p.p.Substring(p.SeparatorIndex + 1))))
-                {
-                    if (Uri.TryCreate(service.Link, UriKind.RelativeOrAbsolute, out var uri))
-                        OtherExternalServices.AddOrReplace(service.Name, uri);
-                }
-            }
-
-            PostgresConnectionString = conf.GetOrDefault<string>("postgres", null);
-            MySQLConnectionString = conf.GetOrDefault<string>("mysql", null);
-            SQLiteFileName = conf.GetOrDefault<string>("sqlitefile", null);
+          
             
             BundleJsCss = conf.GetOrDefault<bool>("bundlejscss", true);
             DockerDeployment = conf.GetOrDefault<bool>("dockerdeployment", true);
@@ -245,7 +143,6 @@ namespace BTCPayServer.Configuration
             RecommendedPlugins = conf.GetOrDefault("recommended-plugins", "").ToLowerInvariant().Split('\r','\n','\t',' ').Where(s => !string.IsNullOrEmpty(s)).Distinct().ToArray();
         }
 
-        public string PluginDir { get; set; }
         public string PluginRemote { get; set; }
         public string[] RecommendedPlugins { get; set; }
 
@@ -285,28 +182,7 @@ namespace BTCPayServer.Configuration
         }
 
         public string RootPath { get; set; }
-        public Dictionary<string, LightningConnectionString> InternalLightningByCryptoCode { get; set; } = new Dictionary<string, LightningConnectionString>();
-
-        public Dictionary<string, Uri> OtherExternalServices { get; set; } = new Dictionary<string, Uri>();
-        public ExternalServices ExternalServices { get; set; } = new ExternalServices();
-
-        public BTCPayNetworkProvider NetworkProvider { get; set; }
         public bool DockerDeployment { get; set; }
-        public string PostgresConnectionString
-        {
-            get;
-            set;
-        }
-        public string MySQLConnectionString
-        {
-            get;
-            set;
-        }
-        public string SQLiteFileName
-        {
-            get;
-            set;
-        }
         public bool BundleJsCss
         {
             get;

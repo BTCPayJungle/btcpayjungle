@@ -21,7 +21,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.Net.Http.Headers;
+using NBitcoin;
 
 namespace BTCPayServer.Hosting
 {
@@ -44,11 +46,10 @@ namespace BTCPayServer.Hosting
         public void ConfigureServices(IServiceCollection services)
         {
             Logs.Configure(LoggerFactory);
-            services.ConfigureBTCPayServer(Configuration);
             services.AddMemoryCache();
             services.AddDataProtection()
                 .SetApplicationName("BTCPay Server")
-                .PersistKeysToFileSystem(GetDataDir());
+                .PersistKeysToFileSystem(new DirectoryInfo(new DataDirectories().Configure(Configuration).DataDir));
             services.AddIdentity<ApplicationUser, IdentityRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
@@ -75,7 +76,6 @@ namespace BTCPayServer.Hosting
             .ConfigureApiBehaviorOptions(options =>
             {
                 var builtInFactory = options.InvalidModelStateResponseFactory;
-
                 options.InvalidModelStateResponseFactory = context =>
                 {
                     context.HttpContext.Response.StatusCode = (int)HttpStatusCode.UnprocessableEntity;
@@ -156,27 +156,23 @@ namespace BTCPayServer.Hosting
             IWebHostEnvironment env,
             IServiceProvider prov,
             BTCPayServerOptions options,
+            IOptions<DataDirectories> dataDirectories,
             ILoggerFactory loggerFactory)
         {
             Logs.Configuration.LogInformation($"Root Path: {options.RootPath}");
             if (options.RootPath.Equals("/", StringComparison.OrdinalIgnoreCase))
             {
-                ConfigureCore(app, env, prov, loggerFactory, options);
+                ConfigureCore(app, env, prov, loggerFactory, dataDirectories);
             }
             else
             {
                 app.Map(options.RootPath, appChild =>
                 {
-                    ConfigureCore(appChild, env, prov, loggerFactory, options);
+                    ConfigureCore(appChild, env, prov, loggerFactory, dataDirectories);
                 });
             }
         }
-        private DirectoryInfo GetDataDir()
-        {
-            return new DirectoryInfo(Configuration.GetDataDir(DefaultConfiguration.GetNetworkType(Configuration)));
-        }
-
-        private static void ConfigureCore(IApplicationBuilder app, IWebHostEnvironment env, IServiceProvider prov, ILoggerFactory loggerFactory, BTCPayServerOptions options)
+        private static void ConfigureCore(IApplicationBuilder app, IWebHostEnvironment env, IServiceProvider prov, ILoggerFactory loggerFactory, IOptions<DataDirectories> dataDirectories)
         {
             Logs.Configure(loggerFactory);
             app.UsePlugins();
@@ -212,7 +208,7 @@ namespace BTCPayServer.Hosting
                 }
             });
 
-            app.UseProviderStorage(options);
+            app.UseProviderStorage(dataDirectories);
             app.UseAuthentication();
             app.UseAuthorization();
             app.UseSession();

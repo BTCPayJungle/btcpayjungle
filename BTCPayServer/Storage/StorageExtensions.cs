@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices.ComTypes;
 using BTCPayServer.Configuration;
 using BTCPayServer.Storage.Services;
 using BTCPayServer.Storage.Services.Providers;
@@ -11,6 +12,7 @@ using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using NBitcoin.Logging;
 
 namespace BTCPayServer.Storage
@@ -27,30 +29,28 @@ namespace BTCPayServer.Storage
             //            serviceCollection.AddSingleton<IStorageProviderService, GoogleCloudStorageFileProviderService>();
         }
 
-        public static void UseProviderStorage(this IApplicationBuilder builder, BTCPayServerOptions options)
+        public static void UseProviderStorage(this IApplicationBuilder builder, IOptions<DataDirectories> datadirs)
         {
             try
             {
-                var dir = FileSystemFileProviderService.GetStorageDir(options);
-                var tmpdir = FileSystemFileProviderService.GetTempStorageDir(options);
                 DirectoryInfo dirInfo;
-                if (!Directory.Exists(dir))
+                if (!Directory.Exists(datadirs.Value.StorageDir))
                 {
-                    dirInfo = Directory.CreateDirectory(dir);
+                    dirInfo = Directory.CreateDirectory(datadirs.Value.StorageDir);
                 }
                 else
                 {
-                    dirInfo = new DirectoryInfo(dir);
+                    dirInfo = new DirectoryInfo(datadirs.Value.StorageDir);
                 }
 
                 DirectoryInfo tmpdirInfo;
-                if (!Directory.Exists(tmpdir))
+                if (!Directory.Exists(datadirs.Value.TempStorageDir))
                 {
-                    tmpdirInfo = Directory.CreateDirectory(tmpdir);
+                    tmpdirInfo = Directory.CreateDirectory(datadirs.Value.TempStorageDir);
                 }
                 else
                 {
-                    tmpdirInfo = new DirectoryInfo(tmpdir);
+                    tmpdirInfo = new DirectoryInfo(datadirs.Value.TempStorageDir);
                 }
 
                 builder.UseStaticFiles(new StaticFileOptions()
