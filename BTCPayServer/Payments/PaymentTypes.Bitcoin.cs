@@ -17,7 +17,7 @@ namespace BTCPayServer.Payments
 
         public override string ToPrettyString() => "On-Chain";
         public override string GetId() => "BTCLike";
-        public override string GetBadge() => "🔗";
+        public override string GetBadge() => "";
         public override string ToStringNormalized() => "OnChain";
         public override CryptoPaymentData DeserializePaymentData(BTCPayNetworkBase network, string str)
         {
@@ -79,5 +79,9 @@ namespace BTCPayServer.Payments
         }
 
         public override string InvoiceViewPaymentPartialName { get; } = "Bitcoin/ViewBitcoinLikePaymentData";
+        public override bool IsPaymentType(string paymentType)
+        {
+            return string.IsNullOrEmpty(paymentType) || base.IsPaymentType(paymentType);
+        }
     }
 }

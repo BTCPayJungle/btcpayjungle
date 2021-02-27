@@ -7,30 +7,24 @@ using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using OpenQA.Selenium;
+using OpenQA.Selenium.Support.UI;
 using Xunit;
 
 namespace BTCPayServer.Tests
 {
     public static class Extensions
     {
-        private static readonly JsonSerializerSettings jsonSettings = new JsonSerializerSettings { ContractResolver = new CamelCasePropertyNamesContractResolver() };
-        public static string ToJson(this object o)
+        private static readonly JsonSerializerSettings JsonSettings = new JsonSerializerSettings { ContractResolver = new CamelCasePropertyNamesContractResolver() };
+        public static string ToJson(this object o) => JsonConvert.SerializeObject(o, Formatting.None, JsonSettings);
+
+        public static void LogIn(this SeleniumTester s, string email)
         {
-            var res = JsonConvert.SerializeObject(o, Formatting.None, jsonSettings);
-            return res;
+            s.Driver.FindElement(By.Id("Email")).SendKeys(email);
+            s.Driver.FindElement(By.Id("Password")).SendKeys("123456");
+            s.Driver.FindElement(By.Id("LoginButton")).Click();
+            s.Driver.AssertNoError();
         }
-        public static void ScrollTo(this IWebDriver driver, By by)
-        {
-            var element = driver.FindElement(by);
-        }
-        /// <summary>
-        /// Sometimes the chrome driver is fucked up and we need some magic to click on the element.
-        /// </summary>
-        /// <param name="element"></param>
-        public static void ForceClick(this IWebElement element)
-        {
-            element.SendKeys(Keys.Return);
-        }
+
         public static void AssertNoError(this IWebDriver driver)
         {
             try
@@ -57,14 +51,18 @@ namespace BTCPayServer.Tests
                             builder.AppendLine($"[{entry.Level}]: {entry.Message}");
                         }
                     }
-                    catch { }
-                    builder.AppendLine($"---------");
+                    catch
+                    {
+                        // ignored
+                    }
+
+                    builder.AppendLine("---------");
                 }
                 Logs.Tester.LogInformation(builder.ToString());
                 builder = new StringBuilder();
-                builder.AppendLine($"Selenium [Sources]:");
+                builder.AppendLine("Selenium [Sources]:");
                 builder.AppendLine(driver.PageSource);
-                builder.AppendLine($"---------");
+                builder.AppendLine("---------");
                 Logs.Tester.LogInformation(builder.ToString());
                 throw;
             }
@@ -107,6 +105,50 @@ namespace BTCPayServer.Tests
                 Thread.Sleep(50);
             }
             Assert.False(true, "Elements was found");
+        }
+
+        public static void UntilJsIsReady(this WebDriverWait wait)
+        {
+            wait.Until(d=>((IJavaScriptExecutor)d).ExecuteScript("return document.readyState").Equals("complete"));
+            wait.Until(d=>((IJavaScriptExecutor)d).ExecuteScript("return typeof(jQuery) === 'undefined' || jQuery.active === 0").Equals(true));
+        }
+
+        public static IWebElement WaitForElement(this IWebDriver driver, By selector)
+        {
+            var wait = new WebDriverWait(driver, SeleniumTester.ImplicitWait);
+            wait.UntilJsIsReady();
+
+            var el = driver.FindElement(selector);
+            wait.Until(d => el.Displayed);
+
+            return el;
+        }
+
+        public static void WaitForAndClick(this IWebDriver driver, By selector)
+        {
+            var wait = new WebDriverWait(driver, SeleniumTester.ImplicitWait);
+            wait.UntilJsIsReady();
+
+            var el = driver.FindElement(selector);
+            wait.Until(d => el.Displayed && el.Enabled);
+            el.Click();
+
+            wait.UntilJsIsReady();
+        }
+
+        public static void SetCheckbox(this IWebDriver driver, By selector, bool value)
+        {
+            var element = driver.FindElement(selector);
+            if ((value && !element.Selected) || (!value && element.Selected))
+            {
+                driver.WaitForAndClick(selector);
+            }
+
+            if (value != element.Selected)
+            {
+                Logs.Tester.LogInformation("SetCheckbox recursion, trying to click again");
+                driver.SetCheckbox(selector, value);
+            }
         }
     }
 }

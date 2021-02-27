@@ -1,19 +1,22 @@
-﻿@{
+﻿@inject BTCPayServer.Services.BTCPayServerEnvironment env
+@{
     Layout = null;
 }
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en"@(env.IsDeveloping ? " data-devenv" : "")>
 <head>
     <partial name="Header" />
+    @RenderSection("HeadScripts", false)
+    @RenderSection("HeaderContent", false)
 </head>
 <body>
-    <section class="content-wrapper">
+    <section class="content-wrapper @(ViewBag.TopSmallMargin != null ? "pt-4" : "")">
         <!-- Dummy navbar-brand, hackish way to keep test AssertNoError passing -->
         <div class="navbar-brand d-none"></div>
         <div class="container">
             @RenderBody()
         </div>
     </section>
-    @await Html.PartialAsync("_ValidationScriptsPartial")
+    @RenderSection("Scripts", false)
 </body>
 </html>

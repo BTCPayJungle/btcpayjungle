@@ -157,8 +157,8 @@
                                             </div>
                                         </div>
                                         <div class="col mt-2 col-12 col-sm-6 mt-sm-0 col-md-12 mt-md-2">
-                                            <button class="btn btn-primary w-100 text-nowrap" v-bind:class="{ 'btn-disabled': loading}" :disabled="loading" type="submit">
-                                                <div v-if="loading" class="spinner-grow spinner-grow-sm" role="status">
+                                            <button class="btn btn-primary w-100 d-flex d-print-none align-items-center justify-content-center text-nowrap" v-bind:class="{ 'btn-disabled': loading}" :disabled="loading" type="submit">
+                                                <div v-if="loading" class="spinner-grow spinner-grow-sm mr-2" role="status">
                                                     <span class="sr-only">Loading...</span>
                                                 </div>
                                                 Pay Invoice
@@ -216,7 +216,7 @@
                             <dl class="mb-0 mt-md-4">
                                 <div class="d-flex d-print-inline-block flex-column mb-4 mr-5">
                                     <dt class="h4 font-weight-normal text-nowrap text-primary text-print-default order-2 order-sm-1 mb-0" v-text="srvModel.amountDueFormatted">@Model.AmountDueFormatted</dt>
-                                    <dd class="text-muted order-1 order-sm-2 mb-1">Amount due</dd>
+                                    <dd class="text-muted order-1 order-sm-2 mb-1" data-test="amount-due-title">Amount due</dd>
                                 </div>
                                 <div class="progress bg-light d-none d-sm-flex mb-sm-4 d-print-none" style="height:5px">
                                   <div class="progress-bar bg-primary" role="progressbar" style="width:@((Model.AmountCollected/Model.Amount)*100)%" v-bind:style="{ width: (srvModel.amountCollected/srvModel.amount*100) + '%' }"></div>

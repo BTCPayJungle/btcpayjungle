@@ -479,21 +479,21 @@ namespace BTCPayServer.Tests
                 //there should be three now
                 invoiceId = s.CreateInvoice(store.storeName, 10, "USD", "a@g.com");
                 s.GoToInvoiceCheckout(invoiceId);
-                var currencyDropdownButton = s.Driver.WaitForElement(By.ClassName("payment__currencies"));
+                var currencyDropdownButton = s.Driver.FindElement(By.ClassName("payment__currencies"));
                 Assert.Contains("BTC", currencyDropdownButton.Text);
                 currencyDropdownButton.Click();
 
                 var elements = s.Driver.FindElement(By.ClassName("vex-content")).FindElements(By.ClassName("vexmenuitem"));
                 Assert.Equal(3, elements.Count);
                 elements.Single(element => element.Text.Contains("LTC")).Click();
-                currencyDropdownButton = s.Driver.WaitForElement(By.ClassName("payment__currencies"));
+                currencyDropdownButton = s.Driver.FindElement(By.ClassName("payment__currencies"));
                 Assert.Contains("LTC", currencyDropdownButton.Text);
                 currencyDropdownButton.Click();
 
                 elements = s.Driver.FindElement(By.ClassName("vex-content")).FindElements(By.ClassName("vexmenuitem"));
                 elements.Single(element => element.Text.Contains("Lightning")).Click();
 
-                currencyDropdownButton = s.Driver.WaitForElement(By.ClassName("payment__currencies"));
+                currencyDropdownButton = s.Driver.FindElement(By.ClassName("payment__currencies"));
                 Assert.Contains("Lightning", currencyDropdownButton.Text);
 
                 s.Driver.Quit();
@@ -872,7 +872,7 @@ normal:
         {
 #pragma warning disable CS0618
             var dummy = new Key().PubKey.GetAddress(ScriptPubKeyType.Legacy, Network.RegTest).ToString();
-            var networkProvider = new BTCPayNetworkProvider(NetworkType.Regtest);
+            var networkProvider = new BTCPayNetworkProvider(ChainName.Regtest);
             var paymentMethodHandlerDictionary = new PaymentMethodHandlerDictionary(new IPaymentMethodHandler[]
             {
                 new BitcoinLikePaymentHandler(null, networkProvider, null, null, null),
@@ -952,9 +952,9 @@ normal:
         [Trait("Altcoins", "Altcoins")]
         public void CanParseDerivationScheme()
         {
-            var testnetNetworkProvider = new BTCPayNetworkProvider(NetworkType.Testnet);
-            var regtestNetworkProvider = new BTCPayNetworkProvider(NetworkType.Regtest);
-            var mainnetNetworkProvider = new BTCPayNetworkProvider(NetworkType.Mainnet);
+            var testnetNetworkProvider = new BTCPayNetworkProvider(ChainName.Testnet);
+            var regtestNetworkProvider = new BTCPayNetworkProvider(ChainName.Regtest);
+            var mainnetNetworkProvider = new BTCPayNetworkProvider(ChainName.Mainnet);
             var testnetParser = new DerivationSchemeParser(testnetNetworkProvider.GetNetwork<BTCPayNetwork>("BTC"));
             var mainnetParser = new DerivationSchemeParser(mainnetNetworkProvider.GetNetwork<BTCPayNetwork>("BTC"));
             NBXplorer.DerivationStrategy.DerivationStrategyBase result;
